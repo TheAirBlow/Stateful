@@ -4,15 +4,29 @@
 ![badges](https://img.shields.io/github/issues/TheAirBlow/Stateful.svg)
 ![badges](https://github.com/TheAirBlow/Stateful/actions/workflows/nuget.yml/badge.svg)
 # Stateful
-Spices up Telegram bot development
+Spice up Telegram bot development
 
 ## Features
 1) Message states to enable simple interactions
-2) Easy to use eflection-based handlers
-3) Other miscellaneous helper classes
+2) Easy to use reflection-based handlers
+3) Automatic reply or inline keyboard generator
+4) Extra helper methods and classes
+
+## States
+Message state is attached to every Telegram message the bot or the user sends. \
+State is inherited from the last sent message, if there is none for the current one.
+```csharp
+// put a database ID in your state for later use
+var id = "b4b920e9-64c7-4fff-9b42-45f331aff67f";
+State.SetState("id", id);
+
+// retrieve the state in a next part of the interaction
+var id = State.GetState<string>("id")!;
+```
 
 ## Usage
 ### Bot setup
+Stateful is just an update handler, which you can use for a simple polling setup:
 ```csharp
 using Stateful.Attributes;
 using Telegram.Bot;
@@ -29,6 +43,7 @@ client.StartReceiving(stateful);
 ```
 
 ### Handling updates
+Make a class that inherits `UpdateHandler` and use attributes to filter updates:
 ```csharp
 using Stateful.Attributes;
 
