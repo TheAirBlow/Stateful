@@ -11,6 +11,6 @@ jobs:
         run: dotnet pack --configuration Release --output .
       - name: Publish
         run: |
-          dotnet nuget push "*.nupkg" -k ${GITHUB_TOKEN}
+          dotnet nuget push "*.nupkg" -s https://api.nuget.org/v3/index.json -k ${GITHUB_TOKEN}
         env:
           GITHUB_TOKEN: ${{ secrets.NUGET_API_KEY }}
