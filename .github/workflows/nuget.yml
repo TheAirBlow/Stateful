@@ -1,0 +1,24 @@
+on:
+  push:
+    tags:
+    - "v[0-9]+.[0-9]+.[0-9]+"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+    - name: Publish package
+      uses: brandedoutcast/publish-nuget@v2.5.2
+      with:
+          PROJECT_FILE_PATH: TheAirBlow.Stateful.csproj
+          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
+    - name: Publish package
+      uses: brandedoutcast/publish-nuget@v2.5.2
+      with:
+          PROJECT_FILE_PATH: TheAirBlow.Stateful.MongoDB.csproj
+          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
