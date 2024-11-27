@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Title>Stateful</Title>
+        <Authors>TheAirBlow</Authors>
+        <Description>Spices up Telegram bot development</Description>
+        <Copyright>Copyright © TheAirBlow 2024</Copyright>
+        <PackageProjectUrl>https://github.com/TheAirBlow/Stateful</PackageProjectUrl>
+        <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENCE</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" />
+      <PackageReference Include="Telegram.Bot" Version="22.1.3" />
+    </ItemGroup>
+</Project>
