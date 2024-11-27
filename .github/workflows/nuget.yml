@@ -1,24 +1,22 @@
 on:
   push:
     tags:
-    - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v4
-    - name: Install dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-    - name: Publish package
-      uses: brandedoutcast/publish-nuget@v2.5.2
-      with:
-          PROJECT_FILE_PATH: TheAirBlow.Stateful.csproj
-          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
-    - name: Publish package
-      uses: brandedoutcast/publish-nuget@v2.5.2
-      with:
-          PROJECT_FILE_PATH: TheAirBlow.Stateful.MongoDB.csproj
-          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
+      - uses: actions/checkout@v4
+      - name: Set VERSION variable from tag
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
+      - name: Build
+        run: dotnet build --configuration Release
+      - name: Package
+        run: dotnet pack --configuration Release --output .
+      - name: Publish
+        run: |
+          dotnet nuget push TheAirBlow.Stateful.${VERSION}.nupkg --api-key ${GITHUB_TOKEN}
+          dotnet nuget push TheAirBlow.Stateful.MongoDB.${VERSION}.nupkg --api-key ${GITHUB_TOKEN}
+        env:
+          GITHUB_TOKEN: ${{ secrets.NUGET_API_KEY }}

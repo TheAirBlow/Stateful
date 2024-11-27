@@ -1,8 +1,8 @@
-using Stateful.Attributes;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
+using TheAirBlow.Stateful.Attributes;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Stateful bot options

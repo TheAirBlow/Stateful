@@ -1,6 +1,6 @@
 using JetBrains.Annotations;
 
-namespace Stateful.Attributes; 
+namespace TheAirBlow.Stateful.Attributes; 
 
 /// <summary>
 /// Marks the method as an update handler and performs checks if necessary

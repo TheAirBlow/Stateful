@@ -1,4 +1,4 @@
-namespace Stateful.Attributes;
+namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
 /// Stateful handler attribute that checks for a document

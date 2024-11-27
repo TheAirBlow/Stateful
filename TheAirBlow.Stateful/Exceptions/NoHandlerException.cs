@@ -1,6 +1,6 @@
 using Telegram.Bot.Types;
 
-namespace Stateful.Exceptions;
+namespace TheAirBlow.Stateful.Exceptions;
 
 /// <summary>
 /// Exception that is thrown when Stateful fails to find a handler method

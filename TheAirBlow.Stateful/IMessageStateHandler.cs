@@ -1,6 +1,6 @@
 using Telegram.Bot.Types;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Message state database handler

@@ -1,6 +1,6 @@
 using Telegram.Bot.Types.Enums;
 
-namespace Stateful.Attributes;
+namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
 /// Handler attribute that checks for callback data

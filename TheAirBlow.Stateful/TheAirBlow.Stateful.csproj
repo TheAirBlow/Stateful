@@ -3,7 +3,7 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <Title>Stateful</Title>
+        <Title>TheAirBlow.Stateful</Title>
         <Authors>TheAirBlow</Authors>
         <Description>Spices up Telegram bot development</Description>
         <Copyright>Copyright © TheAirBlow 2024</Copyright>
@@ -11,6 +11,7 @@
         <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENCE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>

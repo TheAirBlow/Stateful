@@ -1,9 +1,9 @@
-using Stateful.Attributes;
-using Stateful.Keyboards;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
+using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Keyboards;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Internal update handler

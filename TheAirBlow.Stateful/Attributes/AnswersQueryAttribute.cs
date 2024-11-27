@@ -1,4 +1,4 @@
-namespace Stateful.Attributes;
+namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
 /// Disables answering callbacks by default

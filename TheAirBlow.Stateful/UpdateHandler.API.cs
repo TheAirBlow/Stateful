@@ -5,7 +5,7 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.Payments;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Extension methods that integrate Bot APIs with Stateful

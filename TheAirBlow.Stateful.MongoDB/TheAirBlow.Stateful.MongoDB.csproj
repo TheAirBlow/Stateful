@@ -3,7 +3,7 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <Title>Stateful.MongoDB</Title>
+        <Title>TheAirBlow.Stateful.MongoDB</Title>
         <Authors>TheAirBlow</Authors>
         <Description>MongoDB message state handler for Stateful</Description>
         <Copyright>Copyright © TheAirBlow 2024</Copyright>
@@ -11,6 +11,7 @@
         <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENCE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -18,6 +19,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Stateful\Stateful.csproj" />
+      <ProjectReference Include="..\TheAirBlow.Stateful\TheAirBlow.Stateful.csproj" />
     </ItemGroup>
 </Project>

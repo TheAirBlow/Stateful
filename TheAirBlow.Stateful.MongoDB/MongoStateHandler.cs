@@ -2,7 +2,7 @@ using JetBrains.Annotations;
 using MongoDB.Driver;
 using Telegram.Bot.Types;
 
-namespace Stateful.MongoDB;
+namespace TheAirBlow.Stateful.MongoDB;
 
 /// <summary>
 /// MongoDB message state handler

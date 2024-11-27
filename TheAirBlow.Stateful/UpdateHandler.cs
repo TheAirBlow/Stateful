@@ -2,7 +2,7 @@ using JetBrains.Annotations;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 
-namespace Stateful; 
+namespace TheAirBlow.Stateful; 
 
 /// <summary>
 /// Update handler class

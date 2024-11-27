@@ -1,4 +1,4 @@
-namespace Stateful.Attributes;
+namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
 /// Marks method as the default update handler of a class

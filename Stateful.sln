@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stateful", "Stateful\Stateful.csproj", "{D9FCB577-CFE5-42AE-8C1E-784696190450}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheAirBlow.Stateful", "TheAirBlow.Stateful\TheAirBlow.Stateful.csproj", "{D9FCB577-CFE5-42AE-8C1E-784696190450}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stateful.MongoDB", "Stateful.MongoDB\Stateful.MongoDB.csproj", "{1E0945D5-416A-4D3A-BC84-35815F6EF4CD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheAirBlow.Stateful.MongoDB", "TheAirBlow.Stateful.MongoDB\TheAirBlow.Stateful.MongoDB.csproj", "{1E0945D5-416A-4D3A-BC84-35815F6EF4CD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

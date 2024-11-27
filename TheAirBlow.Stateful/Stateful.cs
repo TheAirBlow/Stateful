@@ -1,13 +1,13 @@
 using System.Reflection;
 using JetBrains.Annotations;
-using Stateful.Attributes;
-using Stateful.Exceptions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Exceptions;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Stateful logic implementation

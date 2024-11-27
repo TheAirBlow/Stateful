@@ -1,6 +1,7 @@
 using System.Text.Json;
 using JetBrains.Annotations;
-namespace Stateful;
+
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Message state information

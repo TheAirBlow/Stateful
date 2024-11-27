@@ -1,10 +1,10 @@
-using Stateful.Attributes;
-using Stateful.Keyboards;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Keyboards;
 
-namespace Stateful;
+namespace TheAirBlow.Stateful;
 
 /// <summary>
 /// Various helper extensions

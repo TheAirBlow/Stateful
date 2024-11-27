@@ -1,4 +1,4 @@
-namespace Stateful.Attributes;
+namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
 /// Internal handler attribute that checks for callback data
