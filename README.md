@@ -1,6 +1,6 @@
 ![badges](https://img.shields.io/github/contributors/TheAirBlow/Stateful.svg)
-![badges](https://img.shields.io/github/forks/TheAirBlow/Stateful.svg)
-![badges](https://img.shields.io/github/stars/TheAirBlow/Stateful.svg)
+![badges](https://img.shields.io/github/forks/TheAirBlow/Stateful.svg?style=flat)
+![badges](https://img.shields.io/github/stars/TheAirBlow/Stateful.svg?style=flat)
 ![badges](https://img.shields.io/github/issues/TheAirBlow/Stateful.svg)
 ![badges](https://github.com/TheAirBlow/Stateful/actions/workflows/nuget.yml/badge.svg)
 # Stateful
