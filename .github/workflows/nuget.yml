@@ -5,15 +5,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Set VERSION variable from tag
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\/v/}" >> $GITHUB_ENV
       - name: Build
         run: dotnet build --configuration Release
       - name: Package
         run: dotnet pack --configuration Release --output .
       - name: Publish
         run: |
-          dotnet nuget push TheAirBlow.Stateful.${VERSION}.nupkg --api-key ${GITHUB_TOKEN}
-          dotnet nuget push TheAirBlow.Stateful.MongoDB.${VERSION}.nupkg --api-key ${GITHUB_TOKEN}
+          dotnet nuget push "*.nupkg" -k ${GITHUB_TOKEN}
         env:
           GITHUB_TOKEN: ${{ secrets.NUGET_API_KEY }}
