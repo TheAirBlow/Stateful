@@ -126,8 +126,8 @@ public static class Extensions {
         state.HandlerId = handler.State.HandlerId;
         state.State = handler.State.State;
         state.LastUpdated = DateTime.UtcNow;
+        await stateHandler.Update(state);
         handler.State = state;
-        await handler.SaveState();
         return msg;
     }
     
@@ -145,8 +145,8 @@ public static class Extensions {
             state.HandlerId = handler.State.HandlerId;
             state.State = handler.State.State;
             state.LastUpdated = DateTime.UtcNow;
+            await stateHandler.Update(state);
             handler.State = state;
-            await handler.SaveState();
         }
 
         return msgs;

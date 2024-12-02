@@ -71,7 +71,8 @@ public class StatefulHandler : IUpdateHandler {
             if (!Options.Filters.All(x => x.Match(handler).GetAwaiter().GetResult())) return;
             var method = GetMethod(handler);
             if (method == null) return;
-            if (Options.AnswerCallbackQueries && !method.GetCustomAttributes(false).Any(x => x is AnswersQueryAttribute))
+            if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && 
+                !method.GetCustomAttributes(false).Any(x => x is AnswersQueryAttribute))
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             handler = CreateHandler(bot, update, handler.State, method.DeclaringType);
             await Invoke(method, handler);
@@ -132,17 +133,18 @@ public class StatefulHandler : IUpdateHandler {
                 return !handlers.Any() || handlers.All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult());
             });
         foreach (var i in avail) {
-            var method = i.Methods.FirstOrDefault(x => {
-                var attrs = x.GetCustomAttributes(false);
-                if (attrs.Any(j => j is DefaultHandlerAttribute)) return false;
-                var handlers = attrs.Where(j => j is HandlerAttribute);
-                return handlers.Any() && handlers.All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult());
-            });
-            
+            var method = i.Methods
+                .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object))
+                .FirstOrDefault(x => { 
+                    var attrs = x.GetCustomAttributes(false); 
+                    if (attrs.Any(j => j is DefaultHandlerAttribute)) return false; 
+                    var handlers = attrs.Where(j => j is HandlerAttribute); 
+                    return handlers.Any() && handlers.All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult()); 
+                });
             if (method == null && handler.Update.Type != UpdateType.CallbackQuery) {
                 var attrs = handler.GetType().GetCustomAttributes(false);
-                if (attrs.All(x => x is not PrivateOnlyAttribute) || 
-                    attrs.Any(x => x is PrivateOnlyAttribute { PrivateOnly: false })) return null;
+                if ((attrs.All(x => x is not PrivateOnlyAttribute) || attrs.Any(x => x is PrivateOnlyAttribute { PrivateOnly: false })) 
+                    && Options.Filters.All(x => x is not PrivateOnlyAttribute)) return null;
                 method ??= GetDefault(i, handler);
             }
             

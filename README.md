@@ -31,6 +31,9 @@ Stateful is just an update handler, which you can use for a simple polling setup
 using Stateful.Attributes;
 using Telegram.Bot;
 
+// call this BEFORE you create a MongoDB client!
+MongoStateHandler.RegisterConvention();
+
 var client = new TelegramBotClient("TOKEN");
 var stateful = new StatefulHandler(
     new StatefulOptions {
