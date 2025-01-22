@@ -159,13 +159,14 @@ public static class Extensions {
     internal static async Task AwaitIfTask(this object? obj) {
         if (obj is Task task) await task;
     }
-    
+
     /// <summary>
     /// Checks if all conditions match
     /// </summary>
     /// <param name="attrs">Handler conditions</param>
     /// <param name="handler">Update handler</param>
+    /// <param name="allowEmpty">Allow empty</param>
     /// <returns>True if matches</returns>
-    internal static bool Match(this HandlerAttribute[] attrs, UpdateHandler handler)
-        => attrs.Length == 0 || attrs.All(attr => attr.Match(handler).GetAwaiter().GetResult());
+    internal static bool Match(this HandlerAttribute[] attrs, UpdateHandler handler, bool allowEmpty = true)
+        => (allowEmpty && attrs.Length == 0) || attrs.All(attr => attr.Match(handler).GetAwaiter().GetResult());
 }

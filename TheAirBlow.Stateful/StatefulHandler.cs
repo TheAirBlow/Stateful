@@ -120,9 +120,7 @@ public class StatefulHandler : IUpdateHandler {
             .Where(x => handler.State.HandlerId == null || x.HandlerId == null || x.HandlerId == handler.State.HandlerId)
             .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
-            var method = i.Methods
-                .Where(m => !m.Method.IsSpecialName && m.Method.DeclaringType != typeof(object))
-                .FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler));
+            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler, false));
             if (method == null && handler.Update.Type != UpdateType.CallbackQuery) {
                 if (!i.PrivateOnly && !Options.PrivateOnly) return null;
                 method ??= GetDefault(i, handler);
@@ -142,7 +140,7 @@ public class StatefulHandler : IUpdateHandler {
     /// <param name="handler">Update Handler</param>
     /// <returns>Default Handler</returns>
     private static MethodWrapper? GetDefault(HandlerWrapper wrapper, UpdateHandler handler)
-        => wrapper.Methods.FirstOrDefault(x => x.IsDefault && x.Conditions.Match(handler));
+        => wrapper.Methods.FirstOrDefault(x => x.IsDefault && x.Conditions.Match(handler, false));
 
     /// <summary>
     /// Runs default method of a handler
@@ -211,7 +209,9 @@ public class StatefulHandler : IUpdateHandler {
         /// <param name="id">Unique ID</param>
         public HandlerWrapper(Type handler, string? id) {
             Handler = handler; HandlerId = id;
-            Methods = handler.GetMethods(Flags).Select(x => new MethodWrapper(x)).ToArray();
+            Methods = handler.GetMethods(Flags)
+                .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object))
+                .Select(x => new MethodWrapper(x)).ToArray();
             var attributes = handler.GetCustomAttributes(false);
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             PrivateOnly = attributes.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
