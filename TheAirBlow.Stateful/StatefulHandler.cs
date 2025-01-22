@@ -71,7 +71,7 @@ public class StatefulHandler : IUpdateHandler {
             if (!Options.Filters.Match(handler)) return;
             var method = GetMethod(handler);
             if (method == null) return;
-            if (Options.AnswerCallbackQueries && method.AnswersQuery)
+            if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
             await method.Invoke(handler);
@@ -120,7 +120,9 @@ public class StatefulHandler : IUpdateHandler {
             .Where(x => handler.State.HandlerId == null || x.HandlerId == null || x.HandlerId == handler.State.HandlerId)
             .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
-            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler));
+            var method = i.Methods
+                .Where(m => !m.Method.IsSpecialName && m.Method.DeclaringType != typeof(object))
+                .FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler));
             if (method == null && handler.Update.Type != UpdateType.CallbackQuery) {
                 if (!i.PrivateOnly && !Options.PrivateOnly) return null;
                 method ??= GetDefault(i, handler);

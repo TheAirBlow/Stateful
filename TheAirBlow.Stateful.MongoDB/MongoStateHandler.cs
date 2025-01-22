@@ -1,4 +1,6 @@
 using JetBrains.Annotations;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
 using Telegram.Bot.Types;
 
@@ -15,11 +17,22 @@ public class MongoStateHandler : IMessageStateHandler {
     public IMongoCollection<MessageState> Collection { get; set; }
 
     /// <summary>
+    /// Registers necessary MongoDB conventions
+    /// </summary>
+    public static void RegisterConvention()
+        => ConventionRegistry.Register("TheAirBlow.Stateful.MongoDB", 
+            new ConventionPack {
+                new NoIdMemberConvention(),
+                new IgnoreExtraElementsConvention(true)
+            }, t => t.FullName!.StartsWith("TheAirBlow.Stateful"));
+    
+    /// <summary>
     /// Creates a new MongoDB message state handler
     /// </summary>
     /// <param name="collection">Collection</param>
-    public MongoStateHandler(IMongoCollection<MessageState> collection)
-        => Collection = collection;
+    public MongoStateHandler(IMongoCollection<MessageState> collection) {
+        Collection = collection;
+    }
 
     /// <summary>
     /// Returns message state for message
@@ -34,12 +47,14 @@ public class MongoStateHandler : IMessageStateHandler {
         await res.MoveNextAsync();
         var curState = res.Current.FirstOrDefault();
         if (curState != null) return curState;
-        
-        return new MessageState {
+        var newState = new MessageState {
             LastUpdated = DateTime.UtcNow,
-            MessageId = message.Chat.Id,
-            ChatId = message.Id
+            ChatId = message.Chat.Id,
+            MessageId = message.Id
         };
+        
+        await Collection.InsertOneAsync(newState);
+        return newState;
     }
 
     /// <summary>
