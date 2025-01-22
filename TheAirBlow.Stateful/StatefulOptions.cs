@@ -28,6 +28,11 @@ public class StatefulOptions {
     /// Error handler to use
     /// </summary>
     public HandleErrorDelegate? ErrorHandler { get; set; }
+
+    /// <summary>
+    /// Is entire bot private chat only
+    /// </summary>
+    internal bool PrivateOnly => Filters.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
     
     /// <summary>
     /// Handle error delegate

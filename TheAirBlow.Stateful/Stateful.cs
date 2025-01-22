@@ -68,13 +68,13 @@ public class StatefulHandler : IUpdateHandler {
             var handler = CreateHandler(bot, update);
             if (Options.StateHandler != null)
                 handler.State = await Options.StateHandler.GetState(update);
-            if (!Options.Filters.All(x => x.Match(handler).GetAwaiter().GetResult())) return;
+            if (!Options.Filters.Match(handler)) return;
             var method = GetMethod(handler);
             if (method == null) return;
-            if (Options.AnswerCallbackQueries && !method.GetCustomAttributes(false).Any(x => x is AnswersQueryAttribute))
+            if (Options.AnswerCallbackQueries && method.AnswersQuery)
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
-            handler = CreateHandler(bot, update, handler.State, method.DeclaringType);
-            await Invoke(method, handler);
+            handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
+            await method.Invoke(handler);
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
             await Options.ErrorHandler(bot, e, HandleErrorSource.HandleUpdateError, token);
@@ -95,14 +95,6 @@ public class StatefulHandler : IUpdateHandler {
     }
 
     /// <summary>
-    /// Invokes update handler's method
-    /// </summary>
-    /// <param name="method">Method</param>
-    /// <param name="handler">Update Handler</param>
-    private async Task Invoke(MethodBase method, UpdateHandler handler)
-        => await method.Invoke(handler, []).AwaitIfTask();
-
-    /// <summary>
     /// Creates an update handler
     /// </summary>
     /// <param name="bot">Bot</param>
@@ -113,7 +105,7 @@ public class StatefulHandler : IUpdateHandler {
     private UpdateHandler CreateHandler(TelegramBotClient bot, Update update, MessageState? state = null, Type? type = null) {
         var handler = (UpdateHandler)Activator.CreateInstance(type ?? typeof(UpdateHandler))!;
         handler.Client = bot; handler.Stateful = this;
-        handler.State = state ?? new MessageState(); 
+        handler.State = state ?? new MessageState();
         handler.Update = update;
         return handler;
     }
@@ -123,26 +115,14 @@ public class StatefulHandler : IUpdateHandler {
     /// </summary>
     /// <param name="handler">Update Handler</param>
     /// <returns>Handler Method</returns>
-    public MethodBase? GetMethod(UpdateHandler handler) {
+    private MethodWrapper? GetMethod(UpdateHandler handler) {
         var avail = _handlers
             .Where(x => handler.State.HandlerId == null || x.HandlerId == null || x.HandlerId == handler.State.HandlerId)
-            .Where(x => {
-                var attrs = x.Handler.GetCustomAttributes(false);
-                var handlers = attrs.Where(j => j is HandlerAttribute);
-                return !handlers.Any() || handlers.All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult());
-            });
+            .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
-            var method = i.Methods.FirstOrDefault(x => {
-                var attrs = x.GetCustomAttributes(false);
-                if (attrs.Any(j => j is DefaultHandlerAttribute)) return false;
-                var handlers = attrs.Where(j => j is HandlerAttribute);
-                return handlers.Any() && handlers.All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult());
-            });
-            
+            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler));
             if (method == null && handler.Update.Type != UpdateType.CallbackQuery) {
-                var attrs = handler.GetType().GetCustomAttributes(false);
-                if (attrs.All(x => x is not PrivateOnlyAttribute) || 
-                    attrs.Any(x => x is PrivateOnlyAttribute { PrivateOnly: false })) return null;
+                if (!i.PrivateOnly && !Options.PrivateOnly) return null;
                 method ??= GetDefault(i, handler);
             }
             
@@ -159,12 +139,8 @@ public class StatefulHandler : IUpdateHandler {
     /// <param name="wrapper">Handler Wrapper</param>
     /// <param name="handler">Update Handler</param>
     /// <returns>Default Handler</returns>
-    private static MethodInfo? GetDefault(HandlerWrapper wrapper, UpdateHandler handler)
-        => wrapper.Methods.FirstOrDefault(x => {
-            var attrs = x.GetCustomAttributes(false);
-            return attrs.Any(j => j is DefaultHandlerAttribute) && attrs.Where(j => j is HandlerAttribute)
-                .All(j => j is HandlerAttribute attr && attr.Match(handler).GetAwaiter().GetResult());
-        });
+    private static MethodWrapper? GetDefault(HandlerWrapper wrapper, UpdateHandler handler)
+        => wrapper.Methods.FirstOrDefault(x => x.IsDefault && x.Conditions.Match(handler));
 
     /// <summary>
     /// Runs default method of a handler
@@ -188,14 +164,12 @@ public class StatefulHandler : IUpdateHandler {
         if (runDefault) {
             var method = GetDefault(wrapper, handler);
             if (method == null) {
-                var attrs = handler.GetType().GetCustomAttributes(false);
-                if (attrs.All(x => x is not PrivateOnlyAttribute) || 
-                    attrs.Any(x => x is PrivateOnlyAttribute { PrivateOnly: false })) return;
+                if (!wrapper.PrivateOnly) return;
                 throw new InvalidOperationException($"No default method found for {wrapper.HandlerId}");
             }
             
-            handler = CreateHandler(handler.Client, handler.Update, handler.State, method.DeclaringType);
-            await Invoke(method, handler);
+            handler = CreateHandler(handler.Client, handler.Update, handler.State, method.Method.DeclaringType);
+            await method.Invoke(handler);
         }
     }
     
@@ -209,14 +183,24 @@ public class StatefulHandler : IUpdateHandler {
         public Type Handler { get; }
         
         /// <summary>
-        /// An array of available methods
+        /// An array of handler attributes (conditions)
         /// </summary>
-        public MethodInfo[] Methods { get; }
+        public HandlerAttribute[] Conditions { get; }
+        
+        /// <summary>
+        /// An array of available method wrappers
+        /// </summary>
+        public MethodWrapper[] Methods { get; }
         
         /// <summary>
         /// Unique handler identifier, null is global
         /// </summary>
         public string? HandlerId { get; set; }
+        
+        /// <summary>
+        /// Is method handler private chat only
+        /// </summary>
+        public bool PrivateOnly { get; }
 
         /// <summary>
         /// Creates a new update handler wrapper
@@ -225,7 +209,53 @@ public class StatefulHandler : IUpdateHandler {
         /// <param name="id">Unique ID</param>
         public HandlerWrapper(Type handler, string? id) {
             Handler = handler; HandlerId = id;
-            Methods = handler.GetMethods(Flags);
+            Methods = handler.GetMethods(Flags).Select(x => new MethodWrapper(x)).ToArray();
+            var attributes = handler.GetCustomAttributes(false);
+            Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
+            PrivateOnly = attributes.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
         }
+    }
+
+    /// <summary>
+    /// Update method wrapper
+    /// </summary>
+    private class MethodWrapper {
+        /// <summary>
+        /// Method information
+        /// </summary>
+        public MethodInfo Method { get; }
+        
+        /// <summary>
+        /// An array of handler attributes (conditions)
+        /// </summary>
+        public HandlerAttribute[] Conditions { get; }
+        
+        /// <summary>
+        /// Does this method answer the query manually
+        /// </summary>
+        public bool AnswersQuery { get; }
+        
+        /// <summary>
+        /// Is this the default handler
+        /// </summary>
+        public bool IsDefault { get; }
+
+        /// <summary>
+        /// Creates a new method wrapper
+        /// </summary>
+        /// <param name="method">Method</param>
+        public MethodWrapper(MethodInfo method) {
+            Method = method; var attributes = method.GetCustomAttributes(false);
+            Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
+            AnswersQuery = attributes.Any(x => x is AnswersQueryAttribute);
+            IsDefault = attributes.Any(x => x is DefaultHandlerAttribute);
+        }
+        
+        /// <summary>
+        /// Invokes this method
+        /// </summary>
+        /// <param name="handler">Update Handler</param>
+        public async Task Invoke(UpdateHandler handler)
+            => await Method.Invoke(handler, []).AwaitIfTask();
     }
 }

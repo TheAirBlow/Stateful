@@ -1,7 +1,7 @@
 namespace TheAirBlow.Stateful.Attributes;
 
 /// <summary>
-/// Stateful handler attribute that checks for a document
+/// Marks handler class or method as private chat only
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public class PrivateOnlyAttribute : HandlerAttribute {

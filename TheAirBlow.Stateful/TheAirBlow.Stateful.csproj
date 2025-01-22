@@ -12,6 +12,7 @@
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Version>1.1.0</Version>
     </PropertyGroup>
 
     <ItemGroup>

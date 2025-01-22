@@ -159,4 +159,13 @@ public static class Extensions {
     internal static async Task AwaitIfTask(this object? obj) {
         if (obj is Task task) await task;
     }
+    
+    /// <summary>
+    /// Checks if all conditions match
+    /// </summary>
+    /// <param name="attrs">Handler conditions</param>
+    /// <param name="handler">Update handler</param>
+    /// <returns>True if matches</returns>
+    internal static bool Match(this HandlerAttribute[] attrs, UpdateHandler handler)
+        => attrs.Length == 0 || attrs.All(attr => attr.Match(handler).GetAwaiter().GetResult());
 }
