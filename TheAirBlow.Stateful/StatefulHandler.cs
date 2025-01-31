@@ -210,7 +210,8 @@ public class StatefulHandler : IUpdateHandler {
         public HandlerWrapper(Type handler, string? id) {
             Handler = handler; HandlerId = id;
             Methods = handler.GetMethods(Flags)
-                .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object))
+                .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object) && x.GetParameters().Length == 0)
+                .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
                 .Select(x => new MethodWrapper(x)).ToArray();
             var attributes = handler.GetCustomAttributes(false);
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
