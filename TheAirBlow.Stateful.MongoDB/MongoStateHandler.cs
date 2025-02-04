@@ -39,12 +39,13 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <param name="message">Message</param>
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Message message) {
+        var chatId = message.Chat.Id;
         var userId = message.From?.Id;
         if (userId == null)
             return MessageState.None;
         
         var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.UserId == userId && x.MessageId == message.Id);
+            x => x.UserId == userId && x.ChatId == chatId && x.MessageId == message.Id);
         using var res = await Collection.FindAsync(filter,
             new FindOptions<MessageState> { Limit = 1 });
         await res.MoveNextAsync();
@@ -52,8 +53,9 @@ public class MongoStateHandler : IMessageStateHandler {
         if (curState != null) return curState;
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow,
+            MessageId = message.Id,
             UserId = userId.Value,
-            MessageId = message.Id
+            ChatId = chatId
         };
         
         await Collection.InsertOneAsync(newState);
