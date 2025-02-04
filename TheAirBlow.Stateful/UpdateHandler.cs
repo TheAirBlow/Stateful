@@ -68,7 +68,7 @@ public partial class UpdateHandler {
     /// </summary>
     /// <returns>Generated reply keyboard</returns>
     public ReplyKeyboardMarkup GenerateReply() {
-        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.GetType() == GetType());
+        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
         if (wrapper == null) throw new InvalidOperationException(
             "This method can only be used inside a registered handler");
         var list = new List<string>();
@@ -88,7 +88,7 @@ public partial class UpdateHandler {
     /// </summary>
     /// <returns>Generated reply keyboard</returns>
     public InlineKeyboardMarkup GenerateInline() {
-        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.GetType() == GetType());
+        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
         if (wrapper == null) throw new InvalidOperationException(
             "This method can only be used inside a registered handler");
         

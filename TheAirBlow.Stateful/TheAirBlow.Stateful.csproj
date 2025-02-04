@@ -12,7 +12,7 @@
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>1.2.1</Version>
+        <Version>1.2.2</Version>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
         <DocumentationFile>bin\Release\net8.0\TheAirBlow.Stateful.xml</DocumentationFile>

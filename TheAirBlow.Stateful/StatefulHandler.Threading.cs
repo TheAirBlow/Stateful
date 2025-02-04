@@ -88,6 +88,7 @@ public partial class StatefulHandler {
                         break;
                     }
                     
+                    _userQueue.Add(userId, []);
                     new Thread(() => Threading_UserWrapper(userId, item)).Start();
                 }
                 break;
@@ -100,6 +101,7 @@ public partial class StatefulHandler {
                         break;
                     }
                     
+                    _chatQueue.Add(chatId, []);
                     new Thread(() => Threading_ChatWrapper(chatId, item)).Start();
                 }
                 break;
