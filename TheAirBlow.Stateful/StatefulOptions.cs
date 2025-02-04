@@ -18,6 +18,12 @@ public class StatefulOptions {
     /// You can make an exemption by adding <see cref="AnswersQueryAttribute"/> to the handler method.
     /// </summary>
     public bool AnswerCallbackQueries { get; set; } = true;
+
+    /// <summary>
+    /// Default threading option for update handlers. Set to <see cref="Threading.PerUser"/> by default.
+    /// Can be overridden by adding <see cref="RunWithAttribute"/> to a method or class.
+    /// </summary>
+    public Threading DefaultThreading { get; set; } = Threading.PerUser;
     
     /// <summary>
     /// Message state handler. Disables states completely if set to null.
@@ -43,4 +49,36 @@ public class StatefulOptions {
         HandleErrorSource errorSource,
         CancellationToken cancellationToken
     );
+}
+
+/// <summary>
+/// Threading types
+/// </summary>
+public enum Threading {
+    /// <summary>
+    /// A new thread will be created for each update.
+    /// </summary>
+    PerUpdate,
+        
+    /// <summary>
+    /// A new thread will be created for each user.
+    /// If an update is received before the previous one is processed,
+    /// it will be queued to be processed later on the same thread.
+    /// <br/><br/>
+    /// This is the default option. Fallbacks to <see cref="PerChat"/> if user ID is not available.
+    /// </summary>
+    PerUser,
+        
+    /// <summary>
+    /// A new thread will be created for each chat.
+    /// If an update is received before the previous one is processed,
+    /// it will be queued to be processed later on the same thread.
+    /// </summary>
+    PerChat,
+    
+    /// <summary>
+    /// Everything would be processed on the handler's thread.
+    /// You should never have to use this.
+    /// </summary>
+    Disabled
 }

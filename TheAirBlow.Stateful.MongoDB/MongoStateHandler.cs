@@ -1,5 +1,4 @@
 using JetBrains.Annotations;
-using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
 using Telegram.Bot.Types;
@@ -40,8 +39,12 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <param name="message">Message</param>
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Message message) {
+        var userId = message.From?.Id;
+        if (userId == null)
+            return MessageState.None;
+        
         var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == message.Chat.Id && x.MessageId == message.Id);
+            x => x.UserId == userId && x.MessageId == message.Id);
         using var res = await Collection.FindAsync(filter,
             new FindOptions<MessageState> { Limit = 1 });
         await res.MoveNextAsync();
@@ -49,7 +52,7 @@ public class MongoStateHandler : IMessageStateHandler {
         if (curState != null) return curState;
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow,
-            ChatId = message.Chat.Id,
+            UserId = userId.Value,
             MessageId = message.Id
         };
         
@@ -63,11 +66,15 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <param name="update">Update</param>
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Update update) {
+        var userId = update.GetUserId();
+        if (userId == null)
+            return MessageState.None;
+        
         var chatId = update.GetChatId();
         var messageId = update.GetMessageId();
         
         var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == chatId && x.MessageId == messageId);
+            x => x.UserId == userId && x.ChatId == chatId && x.MessageId == messageId);
         using var res = await Collection.FindAsync(filter,
             new FindOptions<MessageState> { Limit = 1 });
         await res.MoveNextAsync();
@@ -77,11 +84,12 @@ public class MongoStateHandler : IMessageStateHandler {
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow, 
             MessageId = messageId!.Value,
+            UserId = userId.Value,
             ChatId = chatId!.Value
         };
 
         var filter2 = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == chatId && x.MessageId <= messageId);
+            x => x.UserId == userId && x.ChatId == chatId && x.MessageId <= messageId);
         var sort = Builders<MessageState>.Sort.Descending(x => x.MessageId);
         using var res2 = await Collection.FindAsync(filter2,
             new FindOptions<MessageState> { Limit = 1, Sort = sort });
@@ -104,6 +112,7 @@ public class MongoStateHandler : IMessageStateHandler {
         var filter = Builders<MessageState>.Filter;
         await Collection.FindOneAndReplaceAsync(
             filter.Eq(x => x.MessageId, state.MessageId) & 
+            filter.Eq(x => x.UserId, state.UserId) & 
             filter.Eq(x => x.ChatId, state.ChatId), state);
     }
 }

@@ -13,7 +13,7 @@ namespace TheAirBlow.Stateful;
 /// Stateful logic implementation
 /// </summary>
 [PublicAPI]
-public class StatefulHandler : IUpdateHandler {
+public partial class StatefulHandler : IUpdateHandler {
     /// <summary>
     /// Binding flags to use for searching methods
     /// </summary>
@@ -22,7 +22,7 @@ public class StatefulHandler : IUpdateHandler {
     /// <summary>
     /// List of update handlers
     /// </summary>
-    private readonly List<HandlerWrapper> _handlers = [];
+    internal readonly List<HandlerWrapper> Handlers = [];
 
     /// <summary>
     /// Stateful options
@@ -44,7 +44,7 @@ public class StatefulHandler : IUpdateHandler {
     /// <param name="id">Unique ID</param>
     /// <typeparam name="T">Type</typeparam>
     public void Register<T>(string? id = null) where T : UpdateHandler
-        => _handlers.Add(new HandlerWrapper(typeof(T), id));
+        => Handlers.Add(new HandlerWrapper(Options, typeof(T), id));
 
     /// <summary>
     /// Handles an update asynchronously
@@ -74,7 +74,7 @@ public class StatefulHandler : IUpdateHandler {
             if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
-            await method.Invoke(handler);
+            InvokeThreaded(method, handler);
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
             await Options.ErrorHandler(bot, e, HandleErrorSource.HandleUpdateError, token);
@@ -116,7 +116,7 @@ public class StatefulHandler : IUpdateHandler {
     /// <param name="handler">Update Handler</param>
     /// <returns>Handler Method</returns>
     private MethodWrapper? GetMethod(UpdateHandler handler) {
-        var avail = _handlers
+        var avail = Handlers
             .Where(x => handler.State.HandlerId == null || x.HandlerId == null || x.HandlerId == handler.State.HandlerId)
             .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
@@ -149,9 +149,9 @@ public class StatefulHandler : IUpdateHandler {
     /// <param name="id">Handler ID</param>
     /// <param name="runDefault">Run default</param>
     internal async Task ChangeHandler(UpdateHandler handler, string? id, bool runDefault) {
-        var wrapper = _handlers.FirstOrDefault(x => x.HandlerId == id);
+        var wrapper = Handlers.FirstOrDefault(x => x.HandlerId == id);
         if (wrapper == null && id == null)
-            wrapper ??= _handlers.FirstOrDefault(x => x.HandlerId != null);
+            wrapper ??= Handlers.FirstOrDefault(x => x.HandlerId != null);
         if (wrapper == null)
             throw new ArgumentOutOfRangeException(nameof(id),
                 $"No handler with ID {id} was registered");
@@ -176,7 +176,7 @@ public class StatefulHandler : IUpdateHandler {
     /// <summary>
     /// Update handler wrapper
     /// </summary>
-    private class HandlerWrapper {
+    internal class HandlerWrapper {
         /// <summary>
         /// Update handler type
         /// </summary>
@@ -198,6 +198,11 @@ public class StatefulHandler : IUpdateHandler {
         public string? HandlerId { get; set; }
         
         /// <summary>
+        /// Threading type
+        /// </summary>
+        public Threading Threading { get; }
+        
+        /// <summary>
         /// Is method handler private chat only
         /// </summary>
         public bool PrivateOnly { get; }
@@ -205,24 +210,28 @@ public class StatefulHandler : IUpdateHandler {
         /// <summary>
         /// Creates a new update handler wrapper
         /// </summary>
+        /// <param name="options">Stateful Options</param>
         /// <param name="handler">Handler Type</param>
         /// <param name="id">Unique ID</param>
-        public HandlerWrapper(Type handler, string? id) {
+        public HandlerWrapper(StatefulOptions options, Type handler, string? id) {
             Handler = handler; HandlerId = id;
-            Methods = handler.GetMethods(Flags)
-                .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object) && x.GetParameters().Length == 0)
-                .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
-                .Select(x => new MethodWrapper(x)).ToArray();
             var attributes = handler.GetCustomAttributes(false);
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             PrivateOnly = attributes.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
+            Threading = options.DefaultThreading;
+            var runWith = attributes.FirstOrDefault(x => x is RunWithAttribute);
+            if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
+            Methods = handler.GetMethods(Flags)
+                .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object) && x.GetParameters().Length == 0)
+                .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
+                .Select(x => new MethodWrapper(this, x)).ToArray();
         }
     }
 
     /// <summary>
     /// Update method wrapper
     /// </summary>
-    private class MethodWrapper {
+    internal class MethodWrapper {
         /// <summary>
         /// Method information
         /// </summary>
@@ -232,6 +241,11 @@ public class StatefulHandler : IUpdateHandler {
         /// An array of handler attributes (conditions)
         /// </summary>
         public HandlerAttribute[] Conditions { get; }
+        
+        /// <summary>
+        /// Threading type
+        /// </summary>
+        public Threading Threading { get; }
         
         /// <summary>
         /// Does this method answer the query manually
@@ -246,14 +260,18 @@ public class StatefulHandler : IUpdateHandler {
         /// <summary>
         /// Creates a new method wrapper
         /// </summary>
+        /// <param name="handler">Handler</param>
         /// <param name="method">Method</param>
-        public MethodWrapper(MethodInfo method) {
+        public MethodWrapper(HandlerWrapper handler, MethodInfo method) {
             Method = method; var attributes = method.GetCustomAttributes(false);
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             AnswersQuery = attributes.Any(x => x is AnswersQueryAttribute);
             IsDefault = attributes.Any(x => x is DefaultHandlerAttribute);
+            Threading = handler.Threading;
+            var runWith = attributes.FirstOrDefault(x => x is RunWithAttribute);
+            if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
         }
-        
+
         /// <summary>
         /// Invokes this method
         /// </summary>

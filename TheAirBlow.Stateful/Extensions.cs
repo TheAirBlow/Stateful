@@ -11,42 +11,6 @@ namespace TheAirBlow.Stateful;
 /// </summary>
 public static class Extensions {
     /// <summary>
-    /// Generates a reply keyboard for this handler
-    /// </summary>
-    /// <param name="handler">Update Handler</param>
-    /// <returns>Generated reply keyboard</returns>
-    public static ReplyKeyboardMarkup GenerateReply(this UpdateHandler handler) {
-        var list = new List<string>();
-        foreach (var method in handler.GetType().GetMethods(StatefulHandler.Flags)) {
-            var attrs = method.GetCustomAttributes(false);
-            var msg = (MessageAttribute?)attrs.FirstOrDefault(x => x is MessageAttribute);
-            if (msg == null || msg.Hidden || msg.Message == null) continue;
-            if (attrs.Where(x => x is not MessageAttribute && x is HandlerAttribute)
-                .Any(x => x is HandlerAttribute attr && !attr.Match(handler).GetAwaiter().GetResult())) continue;
-            list.Add(msg.Message);
-        }
-        return Keyboard.Reply(list.ToArray());
-    }
-    
-    /// <summary>
-    /// Generates a reply keyboard for this handler
-    /// </summary>
-    /// <param name="handler">Update Handler</param>
-    /// <returns>Generated reply keyboard</returns>
-    public static InlineKeyboardMarkup GenerateInline(this UpdateHandler handler) {
-        var dict = new Dictionary<string, string>();
-        foreach (var method in handler.GetType().GetMethods(StatefulHandler.Flags)) {
-            var attrs = method.GetCustomAttributes(false);
-            var call = (CallbackAttribute?)attrs.FirstOrDefault(x => x is CallbackAttribute);
-            if (call == null || call.Hidden || call.Data == null) continue;
-            if (attrs.Where(x => x is not CallbackAttribute && x is HandlerAttribute)
-                .Any(x => x is HandlerAttribute attr && !attr.Match(handler).GetAwaiter().GetResult())) continue;
-            dict.Add(call.Name ?? call.Data, call.Data.TrimEnd('\n'));
-        }
-        return Keyboard.Inline(dict);
-    }
-    
-    /// <summary>
     /// Checks if the update happened in a private chat
     /// </summary>
     /// <param name="update">Update</param>

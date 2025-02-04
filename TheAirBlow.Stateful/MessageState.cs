@@ -9,6 +9,11 @@ namespace TheAirBlow.Stateful;
 [PublicAPI]
 public class MessageState {
     /// <summary>
+    /// Null message state
+    /// </summary>
+    public static readonly MessageState None = new();
+    
+    /// <summary>
     /// A dictionary of states you can use to store arbitrary information
     /// </summary>
     public Dictionary<string, string> State { get; set; } = [];
@@ -27,6 +32,11 @@ public class MessageState {
     /// Telegram message ID
     /// </summary>
     public long MessageId { get; set; }
+    
+    /// <summary>
+    /// Telegram user ID
+    /// </summary>
+    public long UserId { get; set; }
     
     /// <summary>
     /// Telegram chat ID
