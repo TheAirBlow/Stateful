@@ -917,6 +917,7 @@ public partial class UpdateHandler {
     /// <param name="text">Text that will be shown along with the gift; 0-255 characters</param>
     /// <param name="textParseMode">Mode for parsing entities in the text. See <a href="https://core.telegram.org/bots/api#formatting-options">formatting options</a> for more details. Entities other than <see cref="MessageEntityType.Bold">Bold</see>, <see cref="MessageEntityType.Italic">Italic</see>, <see cref="MessageEntityType.Underline">Underline</see>, <see cref="MessageEntityType.Strikethrough">Strikethrough</see>, <see cref="MessageEntityType.Spoiler">Spoiler</see>, and <see cref="MessageEntityType.CustomEmoji">CustomEmoji</see> are ignored.</param>
     /// <param name="textEntities">A list of special entities that appear in the gift text. It can be specified instead of <paramref name="textParseMode"/>. Entities other than <see cref="MessageEntityType.Bold">Bold</see>, <see cref="MessageEntityType.Italic">Italic</see>, <see cref="MessageEntityType.Underline">Underline</see>, <see cref="MessageEntityType.Strikethrough">Strikethrough</see>, <see cref="MessageEntityType.Spoiler">Spoiler</see>, and <see cref="MessageEntityType.CustomEmoji">CustomEmoji</see> are ignored.</param>
+    /// <param name="payForUpgrade">Pass <see langword="true"/> to pay for the gift upgrade from the bot's balance, thereby making the upgrade free for the receiver</param>
     /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation</param>
     public async Task SendGift(
         string giftId,
@@ -924,11 +925,12 @@ public partial class UpdateHandler {
         string? text = default,
         ParseMode textParseMode = ParseMode.Markdown,
         IEnumerable<MessageEntity>? textEntities = default,
+        bool payForUpgrade = default,
         CancellationToken cancellationToken = default
     ) {
         userId ??= UserId;
         if (userId == null) throw new ArgumentNullException(nameof(userId), "Failed to infer user ID");
-        await Client.SendGift(userId.Value, giftId, text, textParseMode, textEntities, cancellationToken);
+        await Client.SendGift(userId.Value, giftId, text, textParseMode, textEntities, payForUpgrade, cancellationToken);
     }
     
     /// <summary>

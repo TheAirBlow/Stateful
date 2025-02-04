@@ -52,10 +52,8 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="bot">Telegram bot client</param>
     /// <param name="update">Telegram update</param>
     /// <param name="token">Cancellation token</param>
-    public Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken token) {
-        new Thread(async() => await HandleUpdate((TelegramBotClient)bot, update, token)).Start();
-        return Task.CompletedTask;
-    }
+    public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken token)
+        => await HandleUpdate((TelegramBotClient)bot, update, token);
 
     /// <summary>
     /// Handles an update asynchronously
