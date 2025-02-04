@@ -74,7 +74,7 @@ public partial class StatefulHandler : IUpdateHandler {
             if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
-            InvokeThreaded(method, handler);
+            Threading_Invoke(bot, token, method, handler);
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
             await Options.ErrorHandler(bot, e, HandleErrorSource.HandleUpdateError, token);

@@ -1,3 +1,6 @@
+using Telegram.Bot;
+using Telegram.Bot.Polling;
+
 namespace TheAirBlow.Stateful;
 
 /// <summary>
@@ -19,14 +22,14 @@ public partial class StatefulHandler {
     /// </summary>
     /// <param name="id">User ID</param>
     /// <param name="item">Queue Item</param>
-    private void UserWrapper(long id, QueueItem item) {
-        item.Invoke();
+    private void Threading_UserWrapper(long id, QueueItem item) {
+        Threading_MethodWrapper(item);
         while (true)
             lock (_userQueue) {
                 var queue = _userQueue[id];
                 if (queue.Count == 0) break;
                 item = queue.Dequeue();
-                item.Invoke();
+                Threading_MethodWrapper(item);
             }
         lock (_userQueue)
             _userQueue.Remove(id);
@@ -37,29 +40,44 @@ public partial class StatefulHandler {
     /// </summary>
     /// <param name="id">Chat ID</param>
     /// <param name="item">Queue Item</param>
-    private void ChatWrapper(long id, QueueItem item) {
-        item.Invoke();
+    private void Threading_ChatWrapper(long id, QueueItem item) {
+        Threading_MethodWrapper(item);
         while (true)
             lock (_chatQueue) {
                 var queue = _chatQueue[id];
                 if (queue.Count == 0) break;
                 item = queue.Dequeue();
-                item.Invoke();
+                Threading_MethodWrapper(item);
             }
         lock (_chatQueue)
             _chatQueue.Remove(id);
     }
 
     /// <summary>
+    /// Normal method wrapper
+    /// </summary>
+    /// <param name="item">Queue Item</param>
+    private void Threading_MethodWrapper(QueueItem item) {
+        try {
+            item.Invoke();
+        } catch (Exception e) {
+            if (Options.ErrorHandler == null) return;
+            Options.ErrorHandler(item.Bot, e, HandleErrorSource.HandleUpdateError, item.Token);
+        }
+    }
+
+    /// <summary>
     /// Invokes a method in a threaded fashion
     /// </summary>
+    /// <param name="bot">Telegram Bot</param>
+    /// <param name="token">Cancellation token</param>
     /// <param name="wrapper">Method</param>
     /// <param name="handler">Handler</param>
-    private void InvokeThreaded(MethodWrapper wrapper, UpdateHandler handler) {
-        var item = new QueueItem(wrapper, handler);
+    private void Threading_Invoke(TelegramBotClient bot, CancellationToken token, MethodWrapper wrapper, UpdateHandler handler) {
+        var item = new QueueItem(bot, token, wrapper, handler);
         switch (wrapper.Threading) {
             case Threading.PerUpdate:
-                new Thread(item.Invoke).Start();
+                new Thread(() => Threading_MethodWrapper(item)).Start();
                 break;
             case Threading.PerUser:
                 if (!handler.UserId.HasValue) goto goto_PerChat;
@@ -70,7 +88,7 @@ public partial class StatefulHandler {
                         break;
                     }
                     
-                    new Thread(() => UserWrapper(userId, item)).Start();
+                    new Thread(() => Threading_UserWrapper(userId, item)).Start();
                 }
                 break;
             case Threading.PerChat:
@@ -82,7 +100,7 @@ public partial class StatefulHandler {
                         break;
                     }
                     
-                    new Thread(() => ChatWrapper(chatId, item)).Start();
+                    new Thread(() => Threading_ChatWrapper(chatId, item)).Start();
                 }
                 break;
             case Threading.Disabled:
@@ -96,6 +114,16 @@ public partial class StatefulHandler {
     /// </summary>
     private class QueueItem {
         /// <summary>
+        /// Telegram bot client
+        /// </summary>
+        public TelegramBotClient Bot { get; }
+        
+        /// <summary>
+        /// Cancellation token
+        /// </summary>
+        public CancellationToken Token { get; }
+        
+        /// <summary>
         /// Method to invoke
         /// </summary>
         private MethodWrapper Method { get; }
@@ -108,10 +136,12 @@ public partial class StatefulHandler {
         /// <summary>
         /// Creates a new queue item
         /// </summary>
+        /// <param name="bot">Telegram Bot</param>
+        /// <param name="token">Cancellation token</param>
         /// <param name="method">Method</param>
         /// <param name="handler">Handler</param>
-        public QueueItem(MethodWrapper method, UpdateHandler handler) {
-            Method = method; Handler = handler;
+        public QueueItem(TelegramBotClient bot, CancellationToken token, MethodWrapper method, UpdateHandler handler) {
+            Bot = bot; Token = token; Method = method; Handler = handler;
         }
 
         /// <summary>
