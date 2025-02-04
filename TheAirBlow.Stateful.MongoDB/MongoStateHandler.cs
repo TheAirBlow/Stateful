@@ -40,10 +40,7 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Message message) {
         var chatId = message.Chat.Id;
-        var userId = message.From?.Id;
-        if (userId == null)
-            return MessageState.None;
-        
+        var userId = message.From?.Id ?? chatId;
         var filter = new ExpressionFilterDefinition<MessageState>(
             x => x.UserId == userId && x.ChatId == chatId && x.MessageId == message.Id);
         using var res = await Collection.FindAsync(filter,
@@ -54,7 +51,7 @@ public class MongoStateHandler : IMessageStateHandler {
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow,
             MessageId = message.Id,
-            UserId = userId.Value,
+            UserId = userId,
             ChatId = chatId
         };
         
@@ -68,11 +65,8 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <param name="update">Update</param>
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Update update) {
-        var userId = update.GetUserId();
-        if (userId == null)
-            return MessageState.None;
-        
         var chatId = update.GetChatId();
+        var userId = update.GetUserId() ?? chatId;
         var messageId = update.GetMessageId();
         
         var filter = new ExpressionFilterDefinition<MessageState>(
@@ -86,7 +80,7 @@ public class MongoStateHandler : IMessageStateHandler {
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow, 
             MessageId = messageId!.Value,
-            UserId = userId.Value,
+            UserId = userId!.Value,
             ChatId = chatId!.Value
         };
 
