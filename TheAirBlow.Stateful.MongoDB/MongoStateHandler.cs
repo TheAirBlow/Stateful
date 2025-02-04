@@ -40,9 +40,8 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Message message) {
         var chatId = message.Chat.Id;
-        var userId = message.From?.Id ?? chatId;
         var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.UserId == userId && x.ChatId == chatId && x.MessageId == message.Id);
+            x => x.ChatId == chatId && x.MessageId == message.Id);
         using var res = await Collection.FindAsync(filter,
             new FindOptions<MessageState> { Limit = 1 });
         await res.MoveNextAsync();
@@ -51,7 +50,6 @@ public class MongoStateHandler : IMessageStateHandler {
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow,
             MessageId = message.Id,
-            UserId = userId,
             ChatId = chatId
         };
         
@@ -66,11 +64,10 @@ public class MongoStateHandler : IMessageStateHandler {
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Update update) {
         var chatId = update.GetChatId();
-        var userId = update.GetUserId() ?? chatId;
         var messageId = update.GetMessageId();
         
         var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.UserId == userId && x.ChatId == chatId && x.MessageId == messageId);
+            x => x.ChatId == chatId && x.MessageId == messageId);
         using var res = await Collection.FindAsync(filter,
             new FindOptions<MessageState> { Limit = 1 });
         await res.MoveNextAsync();
@@ -80,12 +77,11 @@ public class MongoStateHandler : IMessageStateHandler {
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow, 
             MessageId = messageId!.Value,
-            UserId = userId!.Value,
             ChatId = chatId!.Value
         };
 
         var filter2 = new ExpressionFilterDefinition<MessageState>(
-            x => x.UserId == userId && x.ChatId == chatId && x.MessageId <= messageId);
+            x => x.ChatId == chatId && x.MessageId <= messageId);
         var sort = Builders<MessageState>.Sort.Descending(x => x.MessageId);
         using var res2 = await Collection.FindAsync(filter2,
             new FindOptions<MessageState> { Limit = 1, Sort = sort });
@@ -107,8 +103,7 @@ public class MongoStateHandler : IMessageStateHandler {
     public async Task Update(MessageState state) {
         var filter = Builders<MessageState>.Filter;
         await Collection.FindOneAndReplaceAsync(
-            filter.Eq(x => x.MessageId, state.MessageId) & 
-            filter.Eq(x => x.UserId, state.UserId) & 
+            filter.Eq(x => x.MessageId, state.MessageId) &
             filter.Eq(x => x.ChatId, state.ChatId), state);
     }
 }

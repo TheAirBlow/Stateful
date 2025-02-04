@@ -34,11 +34,6 @@ public class MessageState {
     public long MessageId { get; set; }
     
     /// <summary>
-    /// Telegram user ID
-    /// </summary>
-    public long UserId { get; set; }
-    
-    /// <summary>
     /// Telegram chat ID
     /// </summary>
     public long ChatId { get; set; }
