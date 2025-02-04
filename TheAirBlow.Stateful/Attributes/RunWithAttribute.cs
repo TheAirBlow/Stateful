@@ -4,7 +4,7 @@ namespace TheAirBlow.Stateful.Attributes;
 /// Overrides threading type (methods) or changes the default (classes)
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
-public class RunWithAttribute {
+public class RunWithAttribute : Attribute {
     /// <summary>
     /// Threading value
     /// </summary>
