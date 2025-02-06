@@ -29,6 +29,11 @@ public class MessageState {
     public string? HandlerId { get; set; }
     
     /// <summary>
+    /// Arbitrary submenu value
+    /// </summary>
+    public string? SubMenu { get; set; }
+    
+    /// <summary>
     /// Telegram message ID
     /// </summary>
     public long MessageId { get; set; }

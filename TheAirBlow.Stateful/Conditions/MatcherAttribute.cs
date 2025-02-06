@@ -6,7 +6,7 @@ using TheAirBlow.Stateful.Mappers;
 namespace TheAirBlow.Stateful.Conditions;
 
 /// <summary>
-/// Handler attribute that checks for callback data
+/// Handler attribute that matches arbitrary value by selector
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
 public abstract class MatcherAttribute : HandlerAttribute {
