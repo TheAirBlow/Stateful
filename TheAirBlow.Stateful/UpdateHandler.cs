@@ -1,8 +1,10 @@
 using JetBrains.Annotations;
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Commands;
+using TheAirBlow.Stateful.Conditions;
 using TheAirBlow.Stateful.Keyboards;
 
 namespace TheAirBlow.Stateful; 
@@ -56,7 +58,8 @@ public partial class UpdateHandler {
         => await Stateful.ChangeHandler(this, id, runDefault);
 
     /// <summary>
-    /// Saves state changes to the database
+    /// Saves state changes to the database.
+    /// Required if you edit the current message instead of sending a new one.
     /// </summary>
     public async Task SaveState() {
         if (Stateful.Options.StateHandler == null) return;
@@ -75,10 +78,10 @@ public partial class UpdateHandler {
         
         foreach (var method in wrapper.Methods) {
             var msg = (MessageAttribute?)method.Conditions.FirstOrDefault(x => x is MessageAttribute);
-            if (msg == null || msg.Hidden || msg.Message == null) continue;
+            if (msg == null || msg.Hidden || msg.Selector == null || msg.Matcher != Data.Equals || msg.Type != MessageType.Text) continue;
             if (method.Conditions.Where(x => x is not MessageAttribute)
-                .Any(x => !x.Match(this).GetAwaiter().GetResult())) continue;
-            list.Add(msg.Message);
+                .Any(x => !x.MatchAsync(this).GetAwaiter().GetResult())) continue;
+            list.Add(msg.Selector);
         }
         return Keyboard.Reply(list.ToArray());
     }
@@ -95,11 +98,25 @@ public partial class UpdateHandler {
         var dict = new Dictionary<string, string>();
         foreach (var method in wrapper.Methods) {
             var call = (CallbackAttribute?)method.Conditions.FirstOrDefault(x => x is CallbackAttribute);
-            if (call == null || call.Hidden || call.Data == null) continue;
+            if (call == null || call.Hidden || call.Selector == null || call.Matcher != Data.Equals) continue;
             if (method.Conditions.Where(x => x is not CallbackAttribute)
-                .Any(x => !x.Match(this).GetAwaiter().GetResult())) continue;
-            dict.Add(call.Name ?? call.Data, call.Data.TrimEnd('\n'));
+                .Any(x => !x.MatchAsync(this).GetAwaiter().GetResult())) continue;
+            dict.Add(call.Name ?? call.Selector, call.Selector.TrimEnd('\n'));
         }
         return Keyboard.Inline(dict);
+    }
+
+    /// <summary>
+    /// Returns a list of available commands
+    /// </summary>
+    /// <param name="all">Include restricted</param>
+    /// <returns>List of commands</returns>
+    public CommandInfo[] GetCommands(bool all = false) {
+        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
+        if (wrapper == null) throw new InvalidOperationException(
+            "This method can only be used inside a registered handler");
+
+        return wrapper.Methods.Where(x => x.Conditions.Any(j => j is CommandAttribute))
+            .Select(x => new CommandInfo(x.Method)).ToArray();
     }
 }

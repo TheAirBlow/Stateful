@@ -11,6 +11,8 @@ Spice up Telegram bot development
 2) Easy to use reflection-based handlers
 3) Automatic reply or inline keyboard generator
 4) Extra helper methods and classes
+5) Bot commands support with automatic type mapping
+6) Sub-menus to allow multistep interactions in a menu
 
 ## States
 Message state is attached to every Telegram message the bot or the user sends. \

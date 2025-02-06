@@ -1,6 +1,6 @@
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
-using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Conditions;
 using TheAirBlow.Stateful.Keyboards;
 
 namespace TheAirBlow.Stateful;
@@ -9,10 +9,9 @@ namespace TheAirBlow.Stateful;
 /// Internal update handler
 /// </summary>
 public class InternalHandler : UpdateHandler {
-    [InternalCallback("paginator")]
-    private async Task Paginator() {
-        var id = Update.CallbackQuery?.Data;
-        if (!int.TryParse(id?[21..], out var page)) return;
+    [Callback(Data.ParsedRegex, "stinternal-paginator-([0-9]*)")]
+    private async Task Paginator(string id) {
+        if (!int.TryParse(id, out var page)) return;
         var data = State.GetState<Keyboard.PaginatorData>("paginator_data");
         if (data == null || page < 0 || page >= data.Pages || page == data.Page) return;
         data.Page = page; 

@@ -1,4 +1,6 @@
 using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Commands;
+using TheAirBlow.Stateful.Conditions;
 
 namespace TheAirBlow.Stateful.Testing;
 
@@ -13,6 +15,14 @@ public class MainHandler : UpdateHandler {
     [Message("Open test")]
     private async Task Test()
         => await ChangeHandler("test", true);
+    
+    [Command("start")]
+    private async Task StartCommand()
+        => await SendOrEditMessage("wow this is the start command");
+    
+    [Command("args")]
+    private async Task ArgsTest(int a, string b, int? c = null)
+        => await SendOrEditMessage($"a: `{a}`, b: `{b}`, c: `{c}`");
     
     [Message("Hello 👋")]
     private async Task ExampleReply()

@@ -1,5 +1,6 @@
 using Telegram.Bot;
 using Telegram.Bot.Polling;
+using TheAirBlow.Stateful.Exceptions;
 
 namespace TheAirBlow.Stateful;
 
@@ -60,6 +61,8 @@ public partial class StatefulHandler {
     private void Threading_MethodWrapper(QueueItem item) {
         try {
             item.Invoke();
+        } catch (SilentException) {
+            // Ignore 
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
             Options.ErrorHandler(item.Bot, e, HandleErrorSource.HandleUpdateError, item.Token);

@@ -1,8 +1,6 @@
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
-using TheAirBlow.Stateful.Attributes;
-using TheAirBlow.Stateful.Keyboards;
+using TheAirBlow.Stateful.Conditions;
 
 namespace TheAirBlow.Stateful;
 
@@ -132,5 +130,5 @@ public static class Extensions {
     /// <param name="allowEmpty">Allow empty</param>
     /// <returns>True if matches</returns>
     internal static bool Match(this HandlerAttribute[] attrs, UpdateHandler handler, bool allowEmpty = true)
-        => (allowEmpty && attrs.Length == 0) || attrs.All(attr => attr.Match(handler).GetAwaiter().GetResult());
+        => (allowEmpty && attrs.Length == 0) || attrs.All(attr => attr.MatchAsync(handler).GetAwaiter().GetResult());
 }

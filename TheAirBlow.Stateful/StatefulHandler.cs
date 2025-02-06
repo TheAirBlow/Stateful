@@ -5,6 +5,8 @@ using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Commands;
+using TheAirBlow.Stateful.Conditions;
 using TheAirBlow.Stateful.Exceptions;
 
 namespace TheAirBlow.Stateful;
@@ -28,6 +30,11 @@ public partial class StatefulHandler : IUpdateHandler {
     /// Stateful options
     /// </summary>
     public StatefulOptions Options { get; }
+
+    /// <summary>
+    /// Bot user instance
+    /// </summary>
+    public User? Bot { get; private set; }
 
     /// <summary>
     /// Creates a new stateful client
@@ -63,6 +70,7 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="token">Cancellation token</param>
     private async Task HandleUpdate(TelegramBotClient bot, Update update, CancellationToken token) {
         try {
+            Bot ??= await bot.GetMe(cancellationToken: token);
             var handler = CreateHandler(bot, update);
             if (Options.StateHandler != null)
                 handler.State = await Options.StateHandler.GetState(update);
@@ -73,6 +81,8 @@ public partial class StatefulHandler : IUpdateHandler {
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
             Threading_Invoke(bot, token, method, handler);
+        } catch (SilentException) {
+            // Ignore
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
             await Options.ErrorHandler(bot, e, HandleErrorSource.HandleUpdateError, token);
@@ -115,7 +125,7 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <returns>Handler Method</returns>
     private MethodWrapper? GetMethod(UpdateHandler handler) {
         var avail = Handlers
-            .Where(x => handler.State.HandlerId == null || x.HandlerId == null || x.HandlerId == handler.State.HandlerId)
+            .Where(x => handler.State.HandlerId == null || x.HandlerId == handler.State.HandlerId || x.HandlerId == null)
             .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
             var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler, false));
@@ -220,7 +230,8 @@ public partial class StatefulHandler : IUpdateHandler {
             var runWith = attributes.FirstOrDefault(x => x is RunWithAttribute);
             if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
             Methods = handler.GetMethods(Flags)
-                .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object) && x.GetParameters().Length == 0)
+                .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object))
+                .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute))
                 .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
                 .Select(x => new MethodWrapper(this, x)).ToArray();
         }
@@ -274,7 +285,17 @@ public partial class StatefulHandler : IUpdateHandler {
         /// Invokes this method
         /// </summary>
         /// <param name="handler">Update Handler</param>
-        public async Task Invoke(UpdateHandler handler)
-            => await Method.Invoke(handler, []).AwaitIfTask();
+        public async Task Invoke(UpdateHandler handler) {
+            foreach (var cond in Conditions) {
+                var args = cond.GetArguments(handler, Method);
+                if (args == null) continue;
+                if (args.Length != Method.GetParameters().Length)
+                    throw new InvalidDataException($"Expected {Method.GetParameters().Length} arguments from {cond.GetType().FullName} but found {args.Length}");
+                await Method.Invoke(handler, args).AwaitIfTask();
+                return;
+            }
+            
+            await Method.Invoke(handler, []).AwaitIfTask();
+        }
     }
 }

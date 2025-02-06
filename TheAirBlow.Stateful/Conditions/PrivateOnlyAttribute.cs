@@ -1,4 +1,4 @@
-namespace TheAirBlow.Stateful.Attributes;
+namespace TheAirBlow.Stateful.Conditions;
 
 /// <summary>
 /// Marks handler class or method as private chat only
@@ -22,9 +22,6 @@ public class PrivateOnlyAttribute : HandlerAttribute {
     /// </summary>
     /// <param name="handler">Update Handler</param>
     /// <returns>True if matches</returns>
-    public override Task<bool> Match(UpdateHandler handler)
-        => Task.FromResult(PrivateOnly
-            ? handler.Update.IsPrivateChat()
-            : !handler.Update.IsPrivateChat()
-        );
+    public override bool Match(UpdateHandler handler)
+        => PrivateOnly ? handler.Update.IsPrivateChat() : !handler.Update.IsPrivateChat();
 }

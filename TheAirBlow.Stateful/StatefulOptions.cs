@@ -1,6 +1,8 @@
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using TheAirBlow.Stateful.Attributes;
+using TheAirBlow.Stateful.Commands;
+using TheAirBlow.Stateful.Conditions;
 
 namespace TheAirBlow.Stateful;
 
@@ -34,11 +36,25 @@ public class StatefulOptions {
     /// Error handler to use
     /// </summary>
     public HandleErrorDelegate? ErrorHandler { get; set; }
+    
+    /// <summary>
+    /// Command error handler to use
+    /// </summary>
+    public HandleCommandErrorDelegate? CommandErrorHandler { get; set; }
 
     /// <summary>
     /// Is entire bot private chat only
     /// </summary>
     internal bool PrivateOnly => Filters.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
+    
+    /// <summary>
+    /// Handle command error delegate
+    /// </summary>
+    public delegate Task HandleCommandErrorDelegate(
+        UpdateHandler handler,
+        Exception exception,
+        CommandInfo command
+    );
     
     /// <summary>
     /// Handle error delegate
