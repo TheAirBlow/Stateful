@@ -90,6 +90,7 @@ public class MongoStateHandler : IMessageStateHandler {
         if (prevState != null) {
             newState.State = prevState.State.ToDictionary(x => x.Key, x => x.Value);
             newState.HandlerId = prevState.HandlerId;
+            newState.SubMenu = prevState.SubMenu;
         }
         
         await Collection.InsertOneAsync(newState);
