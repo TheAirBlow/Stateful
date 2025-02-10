@@ -231,7 +231,7 @@ public partial class StatefulHandler : IUpdateHandler {
             if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
             Methods = handler.GetMethods(Flags)
                 .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object))
-                .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute))
+                .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute or HandlerAttribute))
                 .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
                 .Select(x => new MethodWrapper(this, x)).ToArray();
         }

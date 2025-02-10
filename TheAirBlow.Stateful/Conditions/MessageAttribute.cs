@@ -1,3 +1,4 @@
+using System.Reflection;
 using Telegram.Bot.Types.Enums;
 
 namespace TheAirBlow.Stateful.Conditions;
@@ -42,7 +43,7 @@ public class MessageAttribute : MatcherAttribute {
     /// <param name="type">Message type</param>
     /// <param name="hidden">Hidden</param>
     public MessageAttribute(MessageType type, bool hidden = false) {
-        Type = MessageType.Text;  Hidden = hidden;
+        Type = type; Hidden = hidden;
     }
 
     /// <summary>
@@ -52,5 +53,14 @@ public class MessageAttribute : MatcherAttribute {
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler)
         => handler.Update.Type == UpdateType.Message && handler.Update.Message!.Type == Type &&
-           (Type != MessageType.Text || Matches(handler.Update.Message!.Text!));
+           (Type != MessageType.Text || Matches(handler.Update.Message?.Text));
+    
+    /// <summary>
+    /// Returns arguments to pass to specified method
+    /// </summary>
+    /// <param name="handler">Update Handler</param>
+    /// <param name="method">Method info</param>
+    /// <returns>Arguments</returns>
+    public override object[]? GetArguments(UpdateHandler handler, MethodBase method)
+        => GetArguments(handler, method, handler.Update.Message?.Text);
 }

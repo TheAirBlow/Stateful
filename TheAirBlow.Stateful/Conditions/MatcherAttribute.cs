@@ -25,8 +25,8 @@ public abstract class MatcherAttribute : HandlerAttribute {
     /// </summary>
     /// <param name="value">String value</param>
     /// <returns>True if matches</returns>
-    protected bool Matches(string value)
-        => Selector == null || Matcher switch {
+    protected bool Matches(string? value)
+        => Selector == null || (value != null && Matcher switch {
             Data.Equals => value == Selector.TrimEnd('\n'),
             Data.StartsWith => value.StartsWith(Selector),
             Data.EndsWith => value.EndsWith(Selector),
@@ -34,20 +34,21 @@ public abstract class MatcherAttribute : HandlerAttribute {
             Data.Regex => Regex.IsMatch(value, Selector),
             Data.ParsedRegex => Regex.IsMatch(value, Selector),
             _ => false
-        };
-    
+        });
+
     /// <summary>
     /// Returns arguments to pass to specified method
     /// </summary>
     /// <param name="handler">Update Handler</param>
     /// <param name="method">Method info</param>
+    /// <param name="value">String value</param>
     /// <returns>Arguments</returns>
-    public override object[]? GetArguments(UpdateHandler handler, MethodBase method) {
-        if (Matcher != Data.ParsedRegex) return null;
-        var match = Regex.Match(handler.Update.Message!.Text!, Selector!);
+    protected object[]? GetArguments(UpdateHandler handler, MethodBase method, string? value) {
+        if (value == null || Matcher != Data.ParsedRegex) return null;
+        var match = Regex.Match(value, Selector!);
         if (match.Groups.Count - 1 != method.GetParameters().Length)
             throw new InvalidDataException($"Method {method.DeclaringType?.FullName ?? "Anonymous"}.{method.Name} was expected to have {match.Groups.Count - 1} arguments but found {method.GetParameters().Length} instead");
-        return match.Groups.Values.Select(x => x.Value).Zip(method.GetParameters(), (a, b) => TypeMapper.Map(b.ParameterType, a)).ToArray();
+        return match.Groups.Values.Skip(1).Select(x => x.Value).Zip(method.GetParameters(), (a, b) => TypeMapper.Map(b.ParameterType, a)).ToArray();
     }
 }
 

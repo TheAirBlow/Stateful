@@ -1,3 +1,4 @@
+using System.Reflection;
 using Telegram.Bot.Types.Enums;
 
 namespace TheAirBlow.Stateful.Conditions;
@@ -43,5 +44,14 @@ public class CallbackAttribute : MatcherAttribute {
     /// <param name="handler">Update Handler</param>
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler)
-        => handler.Update.Type == UpdateType.CallbackQuery && Matches(handler.Update.CallbackQuery!.Data!);
+        => handler.Update.Type == UpdateType.CallbackQuery && Matches(handler.Update.CallbackQuery?.Data);
+    
+    /// <summary>
+    /// Returns arguments to pass to specified method
+    /// </summary>
+    /// <param name="handler">Update Handler</param>
+    /// <param name="method">Method info</param>
+    /// <returns>Arguments</returns>
+    public override object[]? GetArguments(UpdateHandler handler, MethodBase method)
+        => GetArguments(handler, method, handler.Update.CallbackQuery?.Data);
 }

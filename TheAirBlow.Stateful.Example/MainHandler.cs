@@ -1,6 +1,7 @@
 using TheAirBlow.Stateful.Attributes;
 using TheAirBlow.Stateful.Commands;
 using TheAirBlow.Stateful.Conditions;
+using TheAirBlow.Stateful.Keyboards;
 
 namespace TheAirBlow.Stateful.Testing;
 
@@ -18,7 +19,8 @@ public class MainHandler : UpdateHandler {
     
     [Command("start")]
     private async Task StartCommand()
-        => await SendOrEditMessage("wow this is the start command");
+        => await SendOrEditMessage("wow this is the start command",
+            Keyboard.Paginator(this, 3, "a\n", "b\n", "c\n", "d\n", "e\n", "f\n", "g\n", "h\n", "i\n"));
     
     [Command("args")]
     private async Task ArgsTest(int a, string b, int? c = null)

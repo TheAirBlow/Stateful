@@ -8,10 +8,9 @@ namespace TheAirBlow.Stateful;
 /// <summary>
 /// Internal update handler
 /// </summary>
-public class InternalHandler : UpdateHandler {
+internal class InternalHandler : UpdateHandler {
     [Callback(Data.ParsedRegex, "stinternal-paginator-([0-9]*)")]
-    private async Task Paginator(string id) {
-        if (!int.TryParse(id, out var page)) return;
+    private async Task Paginator(int page) {
         var data = State.GetState<Keyboard.PaginatorData>("paginator_data");
         if (data == null || page < 0 || page >= data.Pages || page == data.Page) return;
         data.Page = page; 
