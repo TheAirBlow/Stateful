@@ -20,8 +20,8 @@ public static class TypeMapper {
     /// <summary>
     /// Registers a type mapper
     /// </summary>
-    public static void Register<T>() where T : CustomTypeMapper {
-        var mapper = (CustomTypeMapper)Activator.CreateInstance(typeof(T))!;
+    public static void Register<T>() where T : CustomTypeMapper, new() {
+        var mapper = new T();
         var types = mapper.Types;
         foreach (var type in types)
             if (_mappers.TryGetValue(type, out var conflict))

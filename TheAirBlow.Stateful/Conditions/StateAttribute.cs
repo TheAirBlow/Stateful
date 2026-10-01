@@ -37,7 +37,7 @@ public class StateAttribute : MatcherAttribute {
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler) {
         try {
-            return Matches(handler.State.GetState<string>(Key));
+            return Matches(handler.State.GetState(Key, StatefulJsonContext.Default.String));
         } catch {
             return false;
         }
@@ -51,7 +51,7 @@ public class StateAttribute : MatcherAttribute {
     /// <returns>Arguments</returns>
     public override object[]? GetArguments(UpdateHandler handler, MethodBase method) {
         try {
-            return GetArguments(handler, method, handler.State.GetState<string>(Key));
+            return GetArguments(handler, method, handler.State.GetState(Key, StatefulJsonContext.Default.String));
         } catch {
             return null;
         }

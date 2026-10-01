@@ -1,6 +1,6 @@
 using System.Reflection;
+using Telegram.Bot.Types.Enums;
 using TheAirBlow.Stateful.Conditions;
-using TheAirBlow.Stateful.Exceptions;
 
 namespace TheAirBlow.Stateful.Commands;
 
@@ -29,6 +29,11 @@ public class CommandAttribute : HandlerAttribute {
     }
 
     /// <summary>
+    /// The only type of update this condition can match, null if any
+    /// </summary>
+    public override UpdateType? Updates => UpdateType.Message;
+
+    /// <summary>
     /// Checks if the condition matches for specified update handler
     /// </summary>
     /// <param name="handler">Update Handler</param>
@@ -50,10 +55,7 @@ public class CommandAttribute : HandlerAttribute {
         try {
             return command.Map(method);
         } catch (Exception e) {
-            // TODO: this is fucking aids, redo this later
-            var info = new CommandInfo(method);
-            handler.Stateful.Options.CommandErrorHandler?.Invoke(handler, e, info).GetAwaiter().GetResult();
-            throw new SilentException();
+            throw new CommandArgumentException(new CommandInfo(method), e);
         }
     }
 }

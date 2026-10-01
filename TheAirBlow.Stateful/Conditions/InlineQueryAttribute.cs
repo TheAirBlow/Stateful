@@ -26,6 +26,16 @@ public class InlineQueryAttribute : MatcherAttribute {
     }
     
     /// <summary>
+    /// The only type of update this condition can match, null if any
+    /// </summary>
+    public override UpdateType? Updates => UpdateType.InlineQuery;
+
+    /// <summary>
+    /// The only message text, callback data or query this condition can match, null if more than one
+    /// </summary>
+    public override string? ExactValue => Exact;
+
+    /// <summary>
     /// Checks if the condition matches for specified update handler
     /// </summary>
     /// <param name="handler">Update Handler</param>

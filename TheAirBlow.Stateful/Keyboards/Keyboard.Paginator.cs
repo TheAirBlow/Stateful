@@ -58,7 +58,7 @@ public static partial class Keyboard {
             Buttons = buttons, Extra = extra,
             PerPage = perPage, Page = 0
         };
-        handler.State.SetState("paginator_data", data, true);
+        handler.State.SetState("paginator_data", data, StatefulJsonContext.Default.PaginatorData, true);
         return data.GetButtons(handler.Stateful.Options.InternalPrefix);
     }
 
@@ -66,7 +66,6 @@ public static partial class Keyboard {
     /// Paginator data
     /// </summary>
     internal class PaginatorData {
-
         /// <summary>
         /// Dictionary of buttons
         /// </summary>

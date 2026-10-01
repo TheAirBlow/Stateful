@@ -13,10 +13,10 @@ internal class InternalHandler : UpdateHandler {
     [Callback(Data.ParsedRegex, "^{internal}paginator-([0-9]+)$")]
     private async Task Paginator(int page) {
         for (var attempt = 0; ; attempt++) {
-            var data = State.GetState<Keyboard.PaginatorData>("paginator_data");
+            var data = State.GetState("paginator_data", StatefulJsonContext.Default.PaginatorData);
             if (data == null || page < 0 || page >= data.Pages || page == data.Page) return;
             data.Page = page; 
-            State.SetState("paginator_data", data, true);
+            State.SetState("paginator_data", data, StatefulJsonContext.Default.PaginatorData, true);
             try {
                 await SaveState();
             } catch (StateConflictException) when (attempt < 2 && Stateful.Options.StateHandler != null) {

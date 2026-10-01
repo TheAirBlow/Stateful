@@ -35,6 +35,16 @@ public partial class UpdateHandler {
     public Update Update { get; internal set; } = null!;
 
     /// <summary>
+    /// Command parsed from the update, valid if <see cref="CommandParsed"/> is set
+    /// </summary>
+    internal Command? ParsedCommand { get; set; }
+    
+    /// <summary>
+    /// Was the command parsed already
+    /// </summary>
+    internal bool CommandParsed { get; set; }
+
+    /// <summary>
     /// Telegram Chat ID
     /// </summary>
     public long? ChatId => Update.GetChatId();

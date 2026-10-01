@@ -1,5 +1,6 @@
 using System.Reflection;
-using System.Runtime.ExceptionServices;
+using System.Reflection.Metadata;
+using System.Diagnostics.CodeAnalysis;
 using JetBrains.Annotations;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -22,6 +23,12 @@ public partial class StatefulHandler : IUpdateHandler {
     /// Binding flags to use for searching methods
     /// </summary>
     internal const BindingFlags Flags = BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public;
+
+    /// <summary>
+    /// Members of handlers that are found with <see cref="Flags"/>, which trimming has to keep
+    /// </summary>
+    internal const DynamicallyAccessedMemberTypes Members
+        = DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods;
 
     /// <summary>
     /// List of update handlers
@@ -57,8 +64,8 @@ public partial class StatefulHandler : IUpdateHandler {
     /// </summary>
     /// <param name="id">Unique ID</param>
     /// <typeparam name="T">Type</typeparam>
-    public void Register<T>(string? id = null) where T : UpdateHandler
-        => Handlers.Add(new HandlerWrapper(Options, typeof(T), id));
+    public void Register<[DynamicallyAccessedMembers(Members)] T>(string? id = null) where T : UpdateHandler, new()
+        => Handlers.Add(new HandlerWrapper(Options, typeof(T), static () => new T(), id));
 
     /// <summary>
     /// Handles an update asynchronously.
@@ -88,16 +95,16 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="lane">Lane this runs on</param>
     private async Task Process(TelegramBotClient bot, Update update, CancellationToken token, Lane lane) {
         Bot ??= await bot.GetMe(cancellationToken: token);
-        var handler = CreateHandler(bot, update);
+        var matcher = CreateHandler(bot, update);
         
         foreach (var filter in Options.Filters)
-            if (!filter.RequiresState && !await filter.MatchAsync(handler)) return;
+            if (!filter.RequiresState && !await filter.MatchAsync(matcher)) return;
         if (Options.StateHandler != null && update.GetChatId() != null && update.GetMessageId() != null)
-            handler.State = await Options.StateHandler.GetState(update);
+            matcher.State = await Options.StateHandler.GetState(update);
         foreach (var filter in Options.Filters)
-            if (filter.RequiresState && !await filter.MatchAsync(handler)) return;
+            if (filter.RequiresState && !await filter.MatchAsync(matcher)) return;
 
-        var method = GetMethod(handler);
+        var method = await GetMethod(matcher);
         if (method == null) return;
         if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
             try {
@@ -106,7 +113,9 @@ public partial class StatefulHandler : IUpdateHandler {
                 // ignore
             }
 
-        handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
+        var handler = CreateHandler(bot, update, matcher.State, method.Create);
+        handler.ParsedCommand = matcher.ParsedCommand;
+        handler.CommandParsed = matcher.CommandParsed;
 
         var target = ResolveLane(update, method.Threading);
         if (target == lane || target.Kind == Threading.Disabled) {
@@ -136,12 +145,12 @@ public partial class StatefulHandler : IUpdateHandler {
     /// Creates an update handler
     /// </summary>
     /// <param name="bot">Bot</param>
-    /// <param name="type">Type</param>
-    /// <param name="state">State</param>
     /// <param name="update">Update</param>
+    /// <param name="state">State</param>
+    /// <param name="create">Handler factory, a plain <see cref="UpdateHandler"/> if null</param>
     /// <returns>Update handler</returns>
-    private UpdateHandler CreateHandler(TelegramBotClient bot, Update update, MessageState? state = null, Type? type = null) {
-        var handler = (UpdateHandler)Activator.CreateInstance(type ?? typeof(UpdateHandler))!;
+    private UpdateHandler CreateHandler(TelegramBotClient bot, Update update, MessageState? state = null, Func<UpdateHandler>? create = null) {
+        var handler = create?.Invoke() ?? new UpdateHandler();
         handler.Client = bot; handler.Stateful = this;
         handler.State = state ?? new MessageState();
         handler.Update = update;
@@ -153,26 +162,25 @@ public partial class StatefulHandler : IUpdateHandler {
     /// </summary>
     /// <param name="handler">Update Handler</param>
     /// <returns>Handler Method</returns>
-    private MethodWrapper? GetMethod(UpdateHandler handler) {
-        var avail = Handlers
-            .Where(x => handler.State.HandlerId == null || x.HandlerId == handler.State.HandlerId || x.HandlerId == null)
-            .Where(x => x.Conditions.Match(handler));
+    private async Task<MethodWrapper?> GetMethod(UpdateHandler handler) {
+        var type = handler.Update.Type;
         if (handler.State.Expired)
-            foreach (var i in avail) {
-                var expired = i.Methods.FirstOrDefault(x => x.IsExpired && x.Conditions.Match(handler, false));
-                if (expired != null) return expired;
+            foreach (var wrapper in Handlers) {
+                if (!wrapper.IsAvailable(handler.State) || !await wrapper.Conditions.MatchAsync(handler)) continue;
+                foreach (var expired in wrapper.Expired)
+                    if (await expired.Conditions.MatchAsync(handler)) return expired;
             }
 
-        foreach (var i in avail) {
-            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && !x.IsExpired && x.Conditions.Match(handler, false));
-            if (method == null && handler.Update.Type != UpdateType.CallbackQuery
-                && (i.PrivateOnly || Options.PrivateOnly))
-                method = GetDefault(i, handler);
+        foreach (var wrapper in Handlers) {
+            if (!wrapper.IsAvailable(handler.State) || !await wrapper.Conditions.MatchAsync(handler)) continue;
+            var method = await wrapper.Find(handler);
+            if (method == null && type != UpdateType.CallbackQuery && (wrapper.PrivateOnly || Options.PrivateOnly))
+                method = await GetDefault(wrapper, handler);
             if (method != null)
                 return method;
         }
         
-        if (handler.Update.Type == UpdateType.CallbackQuery)
+        if (type == UpdateType.CallbackQuery)
             throw new NoHandlerException(handler.Update);
         return null;
     }
@@ -183,8 +191,11 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="wrapper">Handler Wrapper</param>
     /// <param name="handler">Update Handler</param>
     /// <returns>Default Handler</returns>
-    private static MethodWrapper? GetDefault(HandlerWrapper wrapper, UpdateHandler handler)
-        => wrapper.Methods.FirstOrDefault(x => x.IsDefault && x.Conditions.Match(handler, false));
+    private static async Task<MethodWrapper?> GetDefault(HandlerWrapper wrapper, UpdateHandler handler) {
+        foreach (var method in wrapper.Defaults)
+            if (await method.Conditions.MatchAsync(handler)) return method;
+        return null;
+    }
 
     /// <summary>
     /// Runs default method of a handler
@@ -200,13 +211,13 @@ public partial class StatefulHandler : IUpdateHandler {
         handler.State.SetHandler(id);
         await handler.SaveState();
         if (runDefault) {
-            var method = GetDefault(wrapper, handler);
+            var method = await GetDefault(wrapper, handler);
             if (method == null) {
                 if (!wrapper.PrivateOnly) return;
                 throw new InvalidOperationException($"No default method found for {wrapper.HandlerId}");
             }
             
-            handler = CreateHandler(handler.Client, handler.Update, handler.State, method.Method.DeclaringType);
+            handler = CreateHandler(handler.Client, handler.Update, handler.State, method.Create);
             await method.Invoke(handler);
         }
     }
@@ -216,9 +227,26 @@ public partial class StatefulHandler : IUpdateHandler {
     /// </summary>
     internal class HandlerWrapper {
         /// <summary>
+        /// Methods that can match one type of update
+        /// </summary>
+        /// <param name="ByKey">Methods that only match one text or callback data value, by that value</param>
+        /// <param name="Rest">Everything else</param>
+        private record Bucket(Dictionary<string, MethodWrapper[]> ByKey, MethodWrapper[] Rest);
+
+        /// <summary>
+        /// Buckets by update type, created on first use
+        /// </summary>
+        private readonly Bucket?[] _buckets = new Bucket?[Enum.GetValues<UpdateType>().Max(x => (int)x) + 1];
+
+        /// <summary>
         /// Update handler type
         /// </summary>
         public Type Handler { get; }
+
+        /// <summary>
+        /// Creates a handler
+        /// </summary>
+        public Func<UpdateHandler> Create { get; }
         
         /// <summary>
         /// An array of handler attributes (conditions)
@@ -229,6 +257,16 @@ public partial class StatefulHandler : IUpdateHandler {
         /// An array of available method wrappers
         /// </summary>
         public MethodWrapper[] Methods { get; }
+        
+        /// <summary>
+        /// Default methods
+        /// </summary>
+        public MethodWrapper[] Defaults { get; }
+        
+        /// <summary>
+        /// Methods that handle expired messages
+        /// </summary>
+        public MethodWrapper[] Expired { get; }
         
         /// <summary>
         /// Unique handler identifier, null is global
@@ -250,9 +288,11 @@ public partial class StatefulHandler : IUpdateHandler {
         /// </summary>
         /// <param name="options">Stateful Options</param>
         /// <param name="handler">Handler Type</param>
+        /// <param name="create">Creates a handler</param>
         /// <param name="id">Unique ID</param>
-        public HandlerWrapper(StatefulOptions options, Type handler, string? id) {
-            Handler = handler; HandlerId = id;
+        public HandlerWrapper(StatefulOptions options, [DynamicallyAccessedMembers(Members)] Type handler,
+            Func<UpdateHandler> create, string? id) {
+            Handler = handler; Create = create; HandlerId = id;
             var attributes = handler.GetCustomAttributes(false);
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             PrivateOnly = attributes.Any(x => x is PrivateOnlyAttribute { PrivateOnly: true });
@@ -263,8 +303,64 @@ public partial class StatefulHandler : IUpdateHandler {
                 .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object))
                 .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute or HandlerAttribute))
                 .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute or ExpiredHandlerAttribute))
-                .OrderBy(x => x.MetadataToken)
-                .Select(x => new MethodWrapper(this, x)).ToArray();
+                .OrderBy(x => x.HasMetadataToken() ? x.GetMetadataToken() : 0)
+                .Select((x, i) => new MethodWrapper(this, x, i)).ToArray();
+            Defaults = Methods.Where(x => x.IsDefault).ToArray();
+            Expired = Methods.Where(x => x.IsExpired).ToArray();
+        }
+
+        /// <summary>
+        /// Checks if this handler can handle updates of a message with specified state
+        /// </summary>
+        /// <param name="state">Message state</param>
+        /// <returns>True if available</returns>
+        public bool IsAvailable(MessageState state)
+            => state.HandlerId == null || HandlerId == state.HandlerId || HandlerId == null;
+
+        /// <summary>
+        /// Returns the first method, in declaration order, whose conditions match the update.
+        /// </summary>
+        /// <param name="handler">Update Handler</param>
+        /// <returns>Method, null if none</returns>
+        public async Task<MethodWrapper?> Find(UpdateHandler handler) {
+            var type = handler.Update.Type;
+            var bucket = _buckets[(int)type] ??= CreateBucket(type);
+            var key = type switch {
+                UpdateType.Message => handler.Update.Message?.Text,
+                UpdateType.CallbackQuery => handler.Update.CallbackQuery?.Data,
+                UpdateType.InlineQuery => handler.Update.InlineQuery?.Query,
+                UpdateType.ChosenInlineResult => handler.Update.ChosenInlineResult?.Query,
+                _ => null
+            };
+            
+            var keyed = key != null && bucket.ByKey.TryGetValue(key, out var found) ? found : [];
+            var rest = bucket.Rest;
+            int i = 0, j = 0;
+            while (i < keyed.Length || j < rest.Length) {
+                var method = j >= rest.Length || (i < keyed.Length && keyed[i].Order < rest[j].Order)
+                    ? keyed[i++] : rest[j++];
+                if (await method.Conditions.MatchAsync(handler)) return method;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Creates a bucket of methods that can match updates of a type
+        /// </summary>
+        /// <param name="type">Update type</param>
+        /// <returns>Bucket</returns>
+        private Bucket CreateBucket(UpdateType type) {
+            var byKey = new Dictionary<string, List<MethodWrapper>>();
+            var rest = new List<MethodWrapper>();
+            foreach (var method in Methods) {
+                if (method.IsDefault || method.IsExpired || (method.ForUpdate != null && method.ForUpdate != type)) continue;
+                if (method.Key == null) rest.Add(method);
+                else if (byKey.TryGetValue(method.Key, out var list)) list.Add(method);
+                else byKey.Add(method.Key, [method]);
+            }
+
+            return new Bucket(byKey.ToDictionary(x => x.Key, x => x.Value.ToArray()), rest.ToArray());
         }
     }
 
@@ -303,12 +399,40 @@ public partial class StatefulHandler : IUpdateHandler {
         public bool IsExpired { get; }
 
         /// <summary>
+        /// Position among the methods of the handler
+        /// </summary>
+        public int Order { get; }
+
+        /// <summary>
+        /// The only type of update this method can match, null if it can match any
+        /// </summary>
+        public UpdateType? ForUpdate { get; }
+
+        /// <summary>
+        /// The only text, callback data or query this method can match, null if it can match more than one
+        /// </summary>
+        public string? Key { get; }
+
+        /// <summary>
+        /// Number of parameters
+        /// </summary>
+        private int ParameterCount { get; }
+
+        /// <summary>
+        /// Creates a handler the method can be invoked on
+        /// </summary>
+        public Func<UpdateHandler> Create { get; }
+
+        /// <summary>
         /// Creates a new method wrapper
         /// </summary>
         /// <param name="handler">Handler</param>
         /// <param name="method">Method</param>
-        public MethodWrapper(HandlerWrapper handler, MethodInfo method) {
-            Method = method; var attributes = method.GetCustomAttributes(false);
+        /// <param name="order">Position among the methods of the handler</param>
+        public MethodWrapper(HandlerWrapper handler, MethodInfo method, int order) {
+            Method = method; Order = order; Create = handler.Create;
+            var attributes = method.GetCustomAttributes(false);
+            ParameterCount = method.GetParameters().Length;
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             AnswersQuery = attributes.Any(x => x is AnswersQueryAttribute);
             IsDefault = attributes.Any(x => x is DefaultHandlerAttribute);
@@ -316,6 +440,13 @@ public partial class StatefulHandler : IUpdateHandler {
             Threading = handler.Threading;
             var runWith = attributes.FirstOrDefault(x => x is RunWithAttribute);
             if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
+            
+            foreach (var condition in Conditions) {
+                if (condition.Updates == null) continue;
+                ForUpdate ??= condition.Updates;
+                if (condition.Updates == ForUpdate)
+                    Key ??= condition.ExactValue;
+            }
         }
 
         /// <summary>
@@ -324,10 +455,18 @@ public partial class StatefulHandler : IUpdateHandler {
         /// <param name="handler">Update Handler</param>
         public async Task Invoke(UpdateHandler handler) {
             foreach (var cond in Conditions) {
-                var args = cond.GetArguments(handler, Method);
+                object[]? args;
+                try {
+                    args = cond.GetArguments(handler, Method);
+                } catch (CommandArgumentException e) {
+                    if (handler.Stateful.Options.CommandErrorHandler != null)
+                        await handler.Stateful.Options.CommandErrorHandler(handler, e.InnerException!, e.Command);
+                    throw new SilentException();
+                }
+
                 if (args == null) continue;
-                if (args.Length != Method.GetParameters().Length)
-                    throw new InvalidDataException($"Expected {Method.GetParameters().Length} arguments from {cond.GetType().FullName} but found {args.Length}");
+                if (args.Length != ParameterCount)
+                    throw new InvalidDataException($"Expected {ParameterCount} arguments from {cond.GetType().FullName} but found {args.Length}");
                 await InvokeMethod(handler, args);
                 return;
             }
@@ -336,16 +475,12 @@ public partial class StatefulHandler : IUpdateHandler {
         }
 
         /// <summary>
-        /// Invokes the method and unwraps <see cref="TargetInvocationException"/>
+        /// Invokes the method. Missing arguments become default values,
+        /// anything that is not a task is not awaited.
         /// </summary>
         /// <param name="handler">Update Handler</param>
         /// <param name="args">Arguments</param>
-        private async Task InvokeMethod(UpdateHandler handler, object[] args) {
-            try {
-                await Method.Invoke(handler, args).AwaitIfTask();
-            } catch (TargetInvocationException e) when (e.InnerException != null) {
-                ExceptionDispatchInfo.Capture(e.InnerException).Throw();
-            }
-        }
+        private Task InvokeMethod(UpdateHandler handler, object?[] args)
+            => Method.Invoke(handler, BindingFlags.DoNotWrapExceptions, null, args, null) as Task ?? Task.CompletedTask;
     }
 }

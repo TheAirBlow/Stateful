@@ -56,7 +56,10 @@ public sealed class WrapperGenerator : IIncrementalGenerator {
                                   | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier
                                   | SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Initializes the generator
+    /// </summary>
+    /// <param name="context">Initialization context</param>
     public void Initialize(IncrementalGeneratorInitializationContext context) {
         var docs = context.AdditionalTextsProvider
             .Where(static x => Path.GetFileName(x.Path) == "Telegram.Bot.xml")

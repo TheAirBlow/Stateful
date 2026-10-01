@@ -1,5 +1,6 @@
 using System.Reflection;
 using JetBrains.Annotations;
+using Telegram.Bot.Types.Enums;
 
 namespace TheAirBlow.Stateful.Conditions; 
 
@@ -24,6 +25,16 @@ public abstract class HandlerAttribute : Attribute {
     /// <param name="handler">Update Handler</param>
     /// <returns>True if matches</returns>
     public virtual bool Match(UpdateHandler handler) => true;
+
+    /// <summary>
+    /// The only type of update this condition can match, null if any
+    /// </summary>
+    public virtual UpdateType? Updates => null;
+
+    /// <summary>
+    /// The only message text, callback data or query this condition can match, null if more than one
+    /// </summary>
+    public virtual string? ExactValue => null;
 
     /// <summary>
     /// Does this condition use <see cref="UpdateHandler.State"/>. Filters that don't are checked before it is loaded.

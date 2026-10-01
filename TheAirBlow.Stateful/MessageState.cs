@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using JetBrains.Annotations;
 
 namespace TheAirBlow.Stateful;
@@ -73,15 +75,33 @@ public class MessageState {
     }
 
     /// <summary>
-    /// Get state value
+    /// Returns the stored JSON of a state value
+    /// </summary>
+    /// <param name="key">Dictionary Key</param>
+    /// <returns>JSON, null if there is none</returns>
+    private string? Find(string key)
+        => LocalState.TryGetValue(key, out var local) ? local : State.GetValueOrDefault(key);
+
+    /// <summary>
+    /// Get state value using reflection. Not trimming or AOT safe, use the overload with type info instead.
     /// </summary>
     /// <param name="key">Dictionary Key</param>
     /// <typeparam name="T">Type</typeparam>
     /// <returns>Value of type</returns>
+    [RequiresUnreferencedCode("Serializes using reflection, pass a JsonTypeInfo instead")]
+    [RequiresDynamicCode("Serializes using reflection, pass a JsonTypeInfo instead")]
     public T? GetState<T>(string key)
-        => LocalState.TryGetValue(key, out var local) ? JsonSerializer.Deserialize<T>(local)
-            : State.TryGetValue(key, out var value) ? JsonSerializer.Deserialize<T>(value)
-            : default;
+        => Find(key) is { } json ? JsonSerializer.Deserialize<T>(json) : default;
+
+    /// <summary>
+    /// Get state value
+    /// </summary>
+    /// <param name="key">Dictionary Key</param>
+    /// <param name="typeInfo">Type info of the value</param>
+    /// <typeparam name="T">Type</typeparam>
+    /// <returns>Value of type</returns>
+    public T? GetState<T>(string key, JsonTypeInfo<T> typeInfo)
+        => Find(key) is { } json ? JsonSerializer.Deserialize(json, typeInfo) : default;
     
     /// <summary>
     /// Remove state
@@ -95,14 +115,36 @@ public class MessageState {
     }
     
     /// <summary>
-    /// Set state value
+    /// Set state value using reflection. Not trimming or AOT safe, use the overload with type info instead.
     /// </summary>
     /// <param name="key">Dictionary Key</param>
     /// <param name="value">Dictionary Value</param>
     /// <param name="local">Keep the value on this message only instead of passing it on to the next messages.
     /// When used before sending a message, the value is attached to the sent message.</param>
-    public void SetState(string key, object value, bool local = false) {
-        var json = JsonSerializer.Serialize(value);
+    [RequiresUnreferencedCode("Serializes using reflection, pass a JsonTypeInfo instead")]
+    [RequiresDynamicCode("Serializes using reflection, pass a JsonTypeInfo instead")]
+    public void SetState(string key, object value, bool local = false)
+        => Store(key, JsonSerializer.Serialize(value), local);
+
+    /// <summary>
+    /// Set state value
+    /// </summary>
+    /// <param name="key">Dictionary Key</param>
+    /// <param name="value">Dictionary Value</param>
+    /// <param name="typeInfo">Type info of the value</param>
+    /// <param name="local">Keep the value on this message only instead of passing it on to the next messages.
+    /// When used before sending a message, the value is attached to the sent message.</param>
+    /// <typeparam name="T">Type</typeparam>
+    public void SetState<T>(string key, T value, JsonTypeInfo<T> typeInfo, bool local = false)
+        => Store(key, JsonSerializer.Serialize(value, typeInfo), local);
+
+    /// <summary>
+    /// Stores the JSON of a state value
+    /// </summary>
+    /// <param name="key">Dictionary Key</param>
+    /// <param name="json">JSON</param>
+    /// <param name="local">Keep the value on this message only</param>
+    private void Store(string key, string json, bool local) {
         LastUpdated = DateTime.UtcNow;
         if (local) {
             State.Remove(key);

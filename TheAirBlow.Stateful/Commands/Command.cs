@@ -67,6 +67,18 @@ public class Command {
     /// <param name="handler">Update handler</param>
     /// <returns>Command, null if none</returns>
     public static Command? Parse(UpdateHandler handler) {
+        if (handler.CommandParsed) return handler.ParsedCommand;
+        handler.ParsedCommand = ParseCommand(handler);
+        handler.CommandParsed = true;
+        return handler.ParsedCommand;
+    }
+
+    /// <summary>
+    /// Parses command from update
+    /// </summary>
+    /// <param name="handler">Update handler</param>
+    /// <returns>Command, null if none</returns>
+    private static Command? ParseCommand(UpdateHandler handler) {
         var text = handler.Update.Message?.Text;
         if (text == null || !text.StartsWith('/')) return null;
         var split = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
