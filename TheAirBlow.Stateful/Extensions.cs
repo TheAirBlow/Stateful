@@ -9,19 +9,30 @@ namespace TheAirBlow.Stateful;
 /// </summary>
 public static class Extensions {
     /// <summary>
+    /// Returns the message this update is about, if any
+    /// </summary>
+    /// <param name="update">Update</param>
+    /// <returns>Message, null if none</returns>
+    private static Message? GetMessage(this Update update)
+        => update.Message ?? update.EditedMessage ?? update.ChannelPost
+           ?? update.EditedChannelPost ?? update.CallbackQuery?.Message;
+
+    /// <summary>
+    /// Returns the chat this update happened in, if any
+    /// </summary>
+    /// <param name="update">Update</param>
+    /// <returns>Chat, null if none</returns>
+    private static Chat? GetChat(this Update update)
+        => update.GetMessage()?.Chat ?? update.ChatMember?.Chat
+           ?? update.MyChatMember?.Chat ?? update.ChatJoinRequest?.Chat;
+
+    /// <summary>
     /// Checks if the update happened in a private chat
     /// </summary>
     /// <param name="update">Update</param>
-    /// <returns>Chat ID</returns>
+    /// <returns>True if private chat</returns>
     public static bool IsPrivateChat(this Update update)
-        => update.Type switch {
-            UpdateType.CallbackQuery => update.CallbackQuery!.Message!.Chat.Type == ChatType.Private,
-            UpdateType.EditedMessage => update.EditedMessage!.Chat.Type == ChatType.Private,
-            UpdateType.ChannelPost => update.ChannelPost!.Chat.Type == ChatType.Private,
-            UpdateType.ChatMember => update.ChannelPost!.Chat.Type == ChatType.Private,
-            UpdateType.Message => update.Message!.Chat.Type == ChatType.Private,
-            _ => false
-        };
+        => update.GetChat()?.Type == ChatType.Private;
     
     /// <summary>
     /// Get Chat ID from update
@@ -29,14 +40,7 @@ public static class Extensions {
     /// <param name="update">Update</param>
     /// <returns>Chat ID</returns>
     public static long? GetChatId(this Update update)
-        => update.Type switch {
-            UpdateType.CallbackQuery => update.CallbackQuery!.Message!.Chat.Id,
-            UpdateType.EditedMessage => update.EditedMessage!.Chat.Id,
-            UpdateType.ChannelPost => update.ChannelPost!.Chat.Id,
-            UpdateType.ChatMember => update.ChannelPost!.Chat.Id,
-            UpdateType.Message => update.Message!.Chat.Id,
-            _ => null
-        };
+        => update.GetChat()?.Id;
     
     /// <summary>
     /// Get User ID from update
@@ -44,20 +48,13 @@ public static class Extensions {
     /// <param name="update">Update</param>
     /// <returns>User ID</returns>
     public static long? GetUserId(this Update update)
-        => update.Type switch {
-            UpdateType.EditedChannelPost => update.EditedChannelPost!.From!.Id,
-            UpdateType.PreCheckoutQuery => update.PreCheckoutQuery!.From.Id,
-            UpdateType.ChatJoinRequest => update.ChatJoinRequest!.From.Id,
-            UpdateType.EditedMessage => update.EditedMessage!.From!.Id,
-            UpdateType.CallbackQuery => update.CallbackQuery!.From.Id,
-            UpdateType.ShippingQuery => update.ShippingQuery!.From.Id,
-            UpdateType.ChannelPost => update.ChannelPost!.From!.Id,
-            UpdateType.ChatMember => update.ChannelPost!.From!.Id,
-            UpdateType.InlineQuery => update.InlineQuery!.From.Id,
-            UpdateType.PollAnswer => update.PollAnswer!.User!.Id,
-            UpdateType.Message => update.Message!.From!.Id,
-            _ => null
-        };
+        => update.CallbackQuery?.From.Id ?? update.InlineQuery?.From.Id
+           ?? update.ChosenInlineResult?.From.Id ?? update.ShippingQuery?.From.Id
+           ?? update.PreCheckoutQuery?.From.Id ?? update.PollAnswer?.User?.Id
+           ?? update.ChatJoinRequest?.From.Id ?? update.ChatMember?.From.Id
+           ?? update.MyChatMember?.From.Id ?? update.Message?.From?.Id
+           ?? update.EditedMessage?.From?.Id ?? update.ChannelPost?.From?.Id
+           ?? update.EditedChannelPost?.From?.Id;
     
     /// <summary>
     /// Get Message ID from update
@@ -65,15 +62,7 @@ public static class Extensions {
     /// <param name="update">Update</param>
     /// <returns>Message ID</returns>
     public static int? GetMessageId(this Update update)
-        => update.Type switch {
-            UpdateType.CallbackQuery => update.CallbackQuery!.Message!.MessageId,
-            UpdateType.EditedChannelPost => update.EditedChannelPost!.MessageId,
-            UpdateType.EditedMessage => update.EditedMessage!.MessageId,
-            UpdateType.ChannelPost => update.ChannelPost!.MessageId,
-            UpdateType.ChatMember => update.ChannelPost!.MessageId,
-            UpdateType.Message => update.Message!.MessageId,
-            _ => null
-        };
+        => update.GetMessage()?.MessageId;
 
     /// <summary>
     /// Put state data
@@ -86,6 +75,7 @@ public static class Extensions {
         if (stateHandler == null) return msg;
         var state = await stateHandler.GetState(msg);
         state.HandlerId = handler.State.HandlerId;
+        state.SubMenu = handler.State.SubMenu;
         state.State = handler.State.State;
         state.LastUpdated = DateTime.UtcNow;
         await stateHandler.Update(state);
@@ -105,6 +95,7 @@ public static class Extensions {
         foreach (var msg in msgs) {
             var state = await stateHandler.GetState(msg);
             state.HandlerId = handler.State.HandlerId;
+            state.SubMenu = handler.State.SubMenu;
             state.State = handler.State.State;
             state.LastUpdated = DateTime.UtcNow;
             await stateHandler.Update(state);

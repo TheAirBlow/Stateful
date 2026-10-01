@@ -65,6 +65,8 @@ public class MongoStateHandler : IMessageStateHandler {
     public async Task<MessageState> GetState(Update update) {
         var chatId = update.GetChatId();
         var messageId = update.GetMessageId();
+        if (chatId == null || messageId == null)
+            return new MessageState { LastUpdated = DateTime.UtcNow };
         
         var filter = new ExpressionFilterDefinition<MessageState>(
             x => x.ChatId == chatId && x.MessageId == messageId);
@@ -76,8 +78,8 @@ public class MongoStateHandler : IMessageStateHandler {
         
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow, 
-            MessageId = messageId!.Value,
-            ChatId = chatId!.Value
+            MessageId = messageId.Value,
+            ChatId = chatId.Value
         };
 
         var filter2 = new ExpressionFilterDefinition<MessageState>(
@@ -105,6 +107,7 @@ public class MongoStateHandler : IMessageStateHandler {
         var filter = Builders<MessageState>.Filter;
         await Collection.FindOneAndReplaceAsync(
             filter.Eq(x => x.MessageId, state.MessageId) &
-            filter.Eq(x => x.ChatId, state.ChatId), state);
+            filter.Eq(x => x.ChatId, state.ChatId), state,
+            new FindOneAndReplaceOptions<MessageState> { IsUpsert = true });
     }
 }

@@ -101,7 +101,9 @@ public partial class UpdateHandler {
             if (call == null || call.Hidden || call.Selector == null || call.Matcher != Data.Equals) continue;
             if (method.Conditions.Where(x => x is not CallbackAttribute)
                 .Any(x => !x.MatchAsync(this).GetAwaiter().GetResult())) continue;
-            dict.Add(call.Name ?? call.Selector, call.Selector.TrimEnd('\n'));
+            var name = call.Name ?? call.Selector;
+            if (!dict.TryAdd(name, call.Selector.TrimEnd('\n')))
+                throw new InvalidOperationException($"Duplicate inline button name \"{name.TrimEnd('\n')}\" in {GetType().FullName}");
         }
         return Keyboard.Inline(dict);
     }
@@ -109,7 +111,7 @@ public partial class UpdateHandler {
     /// <summary>
     /// Returns a list of available commands
     /// </summary>
-    /// <param name="all">Include restricted</param>
+    /// <param name="all">Include commands whose other conditions (such as private only) don't match the current update</param>
     /// <returns>List of commands</returns>
     public CommandInfo[] GetCommands(bool all = false) {
         var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
@@ -117,6 +119,7 @@ public partial class UpdateHandler {
             "This method can only be used inside a registered handler");
 
         return wrapper.Methods.Where(x => x.Conditions.Any(j => j is CommandAttribute))
+            .Where(x => all || x.Conditions.Where(j => j is not CommandAttribute).ToArray().Match(this))
             .Select(x => new CommandInfo(x.Method)).ToArray();
     }
 }

@@ -20,13 +20,14 @@ public static class TypeMapper {
     /// <summary>
     /// Registers a type mapper
     /// </summary>
-    public static void Register<T>() {
-        var mapper = (CoreTypeMapper)Activator.CreateInstance(typeof(T))!;
-        foreach (var type in mapper.Types) {
+    public static void Register<T>() where T : CustomTypeMapper {
+        var mapper = (CustomTypeMapper)Activator.CreateInstance(typeof(T))!;
+        var types = mapper.Types;
+        foreach (var type in types)
             if (_mappers.TryGetValue(type, out var conflict))
                 throw new ArgumentException($"Mapper conflicts with {conflict.GetType().FullName} because they both map {type.FullName}", nameof(mapper));
+        foreach (var type in types)
             _mappers[type] = mapper;
-        }
     }
     
     /// <summary>
@@ -39,6 +40,20 @@ public static class TypeMapper {
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (type == typeof(string)) return value;
         if (_mappers.TryGetValue(type, out var mapper)) return mapper.Map(type, value);
+        if (type.IsEnum) return MapEnum(type, value);
         throw new InvalidOperationException($"No mapper registered for type {type.FullName}");
+    }
+
+    /// <summary>
+    /// Maps string value to an enum, case-insensitive. Undefined values are rejected.
+    /// </summary>
+    /// <param name="type">Enum type</param>
+    /// <param name="value">String value</param>
+    /// <returns>Enum value</returns>
+    private static object MapEnum(Type type, string value) {
+        var result = Enum.Parse(type, value, true);
+        if (!type.IsDefined(typeof(FlagsAttribute), false) && !Enum.IsDefined(type, result))
+            throw new ArgumentException($"{value} is not a valid {type.Name}", nameof(value));
+        return result;
     }
 }

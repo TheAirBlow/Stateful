@@ -41,12 +41,12 @@ public class Command {
         
         var idx = 0; var args = new List<object>();
         for (var i = 0; i < parameters.Length; i++) {
-            if (idx >= Parameters.Length) {
-                args.Add(null!);
-                break;
-            }
-            
             var param = parameters[i];
+            if (idx >= Parameters.Length) {
+                args.Add(param.HasDefaultValue ? param.DefaultValue! : null!);
+                continue;
+            }
+
             if (i + 1 == parameters.Length && idx + 1 < Parameters.Length && param.ParameterType == typeof(string)) {
                 try { args.Add(TypeMapper.Map(typeof(string), string.Join(' ', Parameters[idx..]))); }
                 catch (Exception e) { throw new InvalidOperationException($"Failed to parse parameter at {idx}", e); }
@@ -69,12 +69,12 @@ public class Command {
     public static Command? Parse(UpdateHandler handler) {
         var text = handler.Update.Message?.Text;
         if (text == null || !text.StartsWith('/')) return null;
-        var split = text.Split(' ');
+        var split = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var cmd = split[0].Split('@');
         if (cmd.Length == 1 && handler.Update.IsPrivateChat())
             return new Command(cmd[0][1..], split[1..]);
         if (cmd.Length == 2) {
-            if (cmd[1] != handler.Stateful.Bot!.Username) return null;
+            if (!string.Equals(cmd[1], handler.Stateful.Bot!.Username, StringComparison.OrdinalIgnoreCase)) return null;
             return new Command(cmd[0][1..], split[1..]);
         }
         return null;

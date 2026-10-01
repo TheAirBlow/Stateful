@@ -7,7 +7,7 @@ public abstract class CustomTypeMapper {
     /// <summary>
     /// An array of types this mapper can map
     /// </summary>
-    public virtual Type[] Types => throw new NotImplementedException();
+    public abstract Type[] Types { get; }
 
     /// <summary>
     /// Maps string to target type
@@ -15,6 +15,5 @@ public abstract class CustomTypeMapper {
     /// <param name="target"></param>
     /// <param name="value">String value</param>
     /// <returns>Parsed type</returns>
-    public virtual object Map(Type target, string value)
-        => throw new NotImplementedException();
+    public abstract object Map(Type target, string value);
 }

@@ -10,7 +10,7 @@ public class SubMenuAttribute : MatcherAttribute {
     /// Check if submenu value equals to
     /// </summary>
     /// <param name="selector">Value</param>
-    protected SubMenuAttribute(string selector) {
+    public SubMenuAttribute(string selector) {
         Matcher = Data.Equals; Selector = selector;
     }
 
@@ -19,7 +19,7 @@ public class SubMenuAttribute : MatcherAttribute {
     /// </summary>
     /// <param name="matcher">Matcher</param>
     /// <param name="selector">Selector</param>
-    protected SubMenuAttribute(Data matcher, string selector) {
+    public SubMenuAttribute(Data matcher, string selector) {
         Matcher = matcher; Selector = selector;
     }
 

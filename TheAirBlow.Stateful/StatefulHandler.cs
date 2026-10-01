@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using JetBrains.Annotations;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -72,13 +74,17 @@ public partial class StatefulHandler : IUpdateHandler {
         try {
             Bot ??= await bot.GetMe(cancellationToken: token);
             var handler = CreateHandler(bot, update);
-            if (Options.StateHandler != null)
+            if (Options.StateHandler != null && update.GetChatId() != null && update.GetMessageId() != null)
                 handler.State = await Options.StateHandler.GetState(update);
             if (!Options.Filters.Match(handler)) return;
             var method = GetMethod(handler);
             if (method == null) return;
             if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
-                await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
+                try {
+                    await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
+                } catch (ApiRequestException) {
+                    // ignore
+                }
             handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
             Threading_Invoke(bot, token, method, handler);
         } catch (SilentException) {
@@ -129,16 +135,16 @@ public partial class StatefulHandler : IUpdateHandler {
             .Where(x => x.Conditions.Match(handler));
         foreach (var i in avail) {
             var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler, false));
-            if (method == null && handler.Update.Type != UpdateType.CallbackQuery) {
-                if (!i.PrivateOnly && !Options.PrivateOnly) return null;
-                method ??= GetDefault(i, handler);
-            }
-            
+            if (method == null && handler.Update.Type != UpdateType.CallbackQuery
+                && (i.PrivateOnly || Options.PrivateOnly))
+                method = GetDefault(i, handler);
             if (method != null)
                 return method;
         }
-
-        throw new NoHandlerException(handler.Update);
+        
+        if (handler.Update.Type == UpdateType.CallbackQuery)
+            throw new NoHandlerException(handler.Update);
+        return null;
     }
 
     /// <summary>
@@ -158,16 +164,10 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="runDefault">Run default</param>
     internal async Task ChangeHandler(UpdateHandler handler, string? id, bool runDefault) {
         var wrapper = Handlers.FirstOrDefault(x => x.HandlerId == id);
-        if (wrapper == null && id == null)
-            wrapper ??= Handlers.FirstOrDefault(x => x.HandlerId != null);
         if (wrapper == null)
             throw new ArgumentOutOfRangeException(nameof(id),
                 $"No handler with ID {id} was registered");
-        if (Options.StateHandler != null) {
-            handler.State = await Options.StateHandler.GetState(handler.Update);
-            handler.State.SetHandler(id);
-        }
-        
+        handler.State.SetHandler(id);
         await handler.SaveState();
         if (runDefault) {
             var method = GetDefault(wrapper, handler);
@@ -233,6 +233,7 @@ public partial class StatefulHandler : IUpdateHandler {
                 .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object))
                 .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute or HandlerAttribute))
                 .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
+                .OrderBy(x => x.MetadataToken)
                 .Select(x => new MethodWrapper(this, x)).ToArray();
         }
     }
@@ -291,11 +292,24 @@ public partial class StatefulHandler : IUpdateHandler {
                 if (args == null) continue;
                 if (args.Length != Method.GetParameters().Length)
                     throw new InvalidDataException($"Expected {Method.GetParameters().Length} arguments from {cond.GetType().FullName} but found {args.Length}");
-                await Method.Invoke(handler, args).AwaitIfTask();
+                await InvokeMethod(handler, args);
                 return;
             }
             
-            await Method.Invoke(handler, []).AwaitIfTask();
+            await InvokeMethod(handler, []);
+        }
+
+        /// <summary>
+        /// Invokes the method and unwraps <see cref="TargetInvocationException"/>
+        /// </summary>
+        /// <param name="handler">Update Handler</param>
+        /// <param name="args">Arguments</param>
+        private async Task InvokeMethod(UpdateHandler handler, object[] args) {
+            try {
+                await Method.Invoke(handler, args).AwaitIfTask();
+            } catch (TargetInvocationException e) when (e.InnerException != null) {
+                ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+            }
         }
     }
 }

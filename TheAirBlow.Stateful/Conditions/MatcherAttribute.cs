@@ -44,8 +44,8 @@ public abstract class MatcherAttribute : HandlerAttribute {
     /// <param name="value">String value</param>
     /// <returns>Arguments</returns>
     protected object[]? GetArguments(UpdateHandler handler, MethodBase method, string? value) {
-        if (value == null || Matcher != Data.ParsedRegex) return null;
-        var match = Regex.Match(value, Selector!);
+        if (value == null || Selector == null || Matcher != Data.ParsedRegex) return null;
+        var match = Regex.Match(value, Selector);
         if (match.Groups.Count - 1 != method.GetParameters().Length)
             throw new InvalidDataException($"Method {method.DeclaringType?.FullName ?? "Anonymous"}.{method.Name} was expected to have {match.Groups.Count - 1} arguments but found {method.GetParameters().Length} instead");
         return match.Groups.Values.Skip(1).Select(x => x.Value).Zip(method.GetParameters(), (a, b) => TypeMapper.Map(b.ParameterType, a)).ToArray();

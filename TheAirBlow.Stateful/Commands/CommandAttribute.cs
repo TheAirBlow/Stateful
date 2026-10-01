@@ -35,7 +35,7 @@ public class CommandAttribute : HandlerAttribute {
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler) {
         var command = Command.Parse(handler);
-        return command != null && command.Name == Name;
+        return command != null && string.Equals(command.Name, Name, StringComparison.OrdinalIgnoreCase);
     }
     
     /// <summary>

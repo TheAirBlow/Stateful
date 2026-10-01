@@ -16,7 +16,7 @@ public class StateAttribute : MatcherAttribute {
     /// </summary>
     /// <param name="key">State Key</param>
     /// <param name="selector">Value</param>
-    protected StateAttribute(string key, string selector) {
+    public StateAttribute(string key, string selector) {
         Matcher = Data.Equals; Key = key; Selector = selector;
     }
 
@@ -26,7 +26,7 @@ public class StateAttribute : MatcherAttribute {
     /// <param name="matcher">Matcher</param>
     /// <param name="key">State Key</param>
     /// <param name="selector">Selector</param>
-    protected StateAttribute(Data matcher, string key, string selector) {
+    public StateAttribute(Data matcher, string key, string selector) {
         Matcher = matcher; Key = key; Selector = selector;
     }
 

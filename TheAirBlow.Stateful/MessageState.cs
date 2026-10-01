@@ -9,9 +9,9 @@ namespace TheAirBlow.Stateful;
 [PublicAPI]
 public class MessageState {
     /// <summary>
-    /// Null message state
+    /// Empty message state.
     /// </summary>
-    public static readonly MessageState None = new();
+    public static MessageState None => new();
     
     /// <summary>
     /// A dictionary of states you can use to store arbitrary information
@@ -67,7 +67,7 @@ public class MessageState {
     /// </summary>
     /// <param name="key">Dictionary Key</param>
     public void RemoveState(string key) {
-        LastUpdated = DateTime.Now;
+        LastUpdated = DateTime.UtcNow;
         State.Remove(key);
     }
     

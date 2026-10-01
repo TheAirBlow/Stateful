@@ -65,7 +65,11 @@ public partial class StatefulHandler {
             // Ignore 
         } catch (Exception e) {
             if (Options.ErrorHandler == null) return;
-            Options.ErrorHandler(item.Bot, e, HandleErrorSource.HandleUpdateError, item.Token);
+            try {
+                Options.ErrorHandler(item.Bot, e, HandleErrorSource.HandleUpdateError, item.Token).GetAwaiter().GetResult();
+            } catch {
+                // ignore
+            }
         }
     }
 
