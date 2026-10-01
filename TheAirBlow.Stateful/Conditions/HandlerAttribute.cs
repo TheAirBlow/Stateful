@@ -26,6 +26,11 @@ public abstract class HandlerAttribute : Attribute {
     public virtual bool Match(UpdateHandler handler) => true;
 
     /// <summary>
+    /// Does this condition use <see cref="UpdateHandler.State"/>. Filters that don't are checked before it is loaded.
+    /// </summary>
+    public virtual bool RequiresState => true;
+
+    /// <summary>
     /// Returns arguments to pass to specified method
     /// </summary>
     /// <param name="handler">Update Handler</param>

@@ -58,14 +58,15 @@ public static partial class Keyboard {
             Buttons = buttons, Extra = extra,
             PerPage = perPage, Page = 0
         };
-        handler.State.SetState("paginator_data", data);
-        return data.GetButtons();
+        handler.State.SetState("paginator_data", data, true);
+        return data.GetButtons(handler.Stateful.Options.InternalPrefix);
     }
 
     /// <summary>
     /// Paginator data
     /// </summary>
     internal class PaginatorData {
+
         /// <summary>
         /// Dictionary of buttons
         /// </summary>
@@ -94,13 +95,14 @@ public static partial class Keyboard {
         /// <summary>
         /// Returns all buttons together with pagination stuff
         /// </summary>
+        /// <param name="internalPrefix"><see cref="StatefulOptions.InternalPrefix"/></param>
         /// <returns>Buttons list</returns>
-        public List<KeyValuePair<string, string>> GetButtons() {
+        public List<KeyValuePair<string, string>> GetButtons(string internalPrefix) {
             var buttons = Buttons.Skip(PerPage * Page).Take(PerPage).ToList();
             if (Pages > 1) for (var i = 1; i <= Pages; i++)
                 buttons.Add(new KeyValuePair<string, string>(
                     (Page + 1 == i ? $"· {i} ·" : $"{i}") + (i == Pages || i % 8 == 0 ? "\n" : ""),
-                    $"stinternal-paginator-{i-1}"));
+                    $"{internalPrefix}paginator-{i-1}"));
             buttons.AddRange(Extra);
             return buttons;
         }

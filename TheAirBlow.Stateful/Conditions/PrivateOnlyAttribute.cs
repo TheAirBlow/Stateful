@@ -18,6 +18,12 @@ public class PrivateOnlyAttribute : HandlerAttribute {
         => PrivateOnly = privateOnly;
     
     /// <summary>
+    /// Does this condition look at <see cref="UpdateHandler.State"/>. If not, global filters using it
+    /// are checked before the state is loaded from the database. True by default, to be safe.
+    /// </summary>
+    public override bool RequiresState => false;
+    
+    /// <summary>
     /// Checks if the condition matches for specified update handler
     /// </summary>
     /// <param name="handler">Update Handler</param>

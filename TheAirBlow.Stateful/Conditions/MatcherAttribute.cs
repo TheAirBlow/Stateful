@@ -16,9 +16,20 @@ public abstract class MatcherAttribute : HandlerAttribute {
     public Data Matcher { get; protected init; }
     
     /// <summary>
-    /// Selector value
+    /// <see cref="StatefulOptions.InternalPrefix"/> while <see cref="InternalHandler"/> is being registered,
+    /// null otherwise
     /// </summary>
-    public string? Selector { get; protected init; }
+    [ThreadStatic]
+    internal static string? InternalPrefix;
+    
+    /// <summary>
+    /// Selector value.
+    /// </summary>
+    public string? Selector {
+        get;
+        protected init => field = InternalPrefix == null ? value : value?.Replace("{internal}",
+            Matcher is Data.Regex or Data.ParsedRegex ? Regex.Escape(InternalPrefix) : InternalPrefix);
+    }
 
     /// <summary>
     /// Checks if the condition matches for specified value

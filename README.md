@@ -26,6 +26,26 @@ State.SetState("id", id);
 var id = State.GetState<string>("id")!;
 ```
 
+### Message-local state
+State is passed on to later messages. Pass `local: true` to keep a value on one message only. \
+A value set before sending is attached to the message you send.
+```csharp
+State.SetState("page", 2, local: true);
+```
+
+### Expired messages
+Message states can expire, if you configure your message state handler appropriately. \
+A button click on a message without a stored state goes to the `ExpiredHandler`, if you have one:
+```csharp
+[ExpiredHandler]
+private async Task Expired()
+    => await SendOrEditMessage("This menu has expired");
+```
+
+### Concurrent changes
+`MongoStateHandler` versions each state and throws `StateConflictException` if it was changed by someone else
+since you loaded it. Reload with `GetState` and apply your change again.
+
 ## Usage
 ### Bot setup
 Stateful is just an update handler, which you can use for a simple polling setup:

@@ -65,44 +65,52 @@ public static class Extensions {
         => update.GetMessage()?.MessageId;
 
     /// <summary>
-    /// Put state data
+    /// Stores the handler's state for a message it just sent or edited, and makes it the handler's current state.
     /// </summary>
     /// <param name="message">Message</param>
     /// <param name="handler">Update Handler</param>
     public static async Task<Message> PutState(this Task<Message> message, UpdateHandler handler) {
         var msg = await message;
-        var stateHandler = handler.Stateful.Options.StateHandler;
-        if (stateHandler == null) return msg;
-        var state = await stateHandler.GetState(msg);
-        state.HandlerId = handler.State.HandlerId;
-        state.SubMenu = handler.State.SubMenu;
-        state.State = handler.State.State;
-        state.LastUpdated = DateTime.UtcNow;
-        await stateHandler.Update(state);
-        handler.State = state;
+        await PutState(handler, handler.State, msg);
         return msg;
     }
     
     /// <summary>
-    /// Put state data
+    /// Stores the handler's state for messages it just sent
     /// </summary>
     /// <param name="messages">Messages</param>
     /// <param name="handler">Update Handler</param>
     public static async Task<Message[]> PutState(this Task<Message[]> messages, UpdateHandler handler) {
         var msgs = await messages;
+        var source = handler.State;
+        foreach (var msg in msgs)
+            await PutState(handler, source, msg);
+        return msgs;
+    }
+
+    /// <summary>
+    /// Stores state for a message
+    /// </summary>
+    /// <param name="handler">Update Handler</param>
+    /// <param name="source">State to take values from</param>
+    /// <param name="msg">Message</param>
+    private static async Task PutState(UpdateHandler handler, MessageState source, Message msg) {
         var stateHandler = handler.Stateful.Options.StateHandler;
-        if (stateHandler == null) return msgs;
-        foreach (var msg in msgs) {
-            var state = await stateHandler.GetState(msg);
-            state.HandlerId = handler.State.HandlerId;
-            state.SubMenu = handler.State.SubMenu;
-            state.State = handler.State.State;
-            state.LastUpdated = DateTime.UtcNow;
-            await stateHandler.Update(state);
-            handler.State = state;
+        if (stateHandler == null) return;
+        var state = source;
+        if (source.ChatId != msg.Chat.Id || source.MessageId != msg.MessageId) {
+            state = await stateHandler.GetState(msg);
+            state.HandlerId = source.HandlerId;
+            state.SubMenu = source.SubMenu;
+            state.State = new Dictionary<string, string>(source.State);
+            foreach (var key in source.PendingLocal)
+                if (source.LocalState.TryGetValue(key, out var value))
+                    state.LocalState[key] = value;
         }
 
-        return msgs;
+        state.LastUpdated = DateTime.UtcNow;
+        await stateHandler.Update(state);
+        handler.State = state;
     }
     
     /// <summary>

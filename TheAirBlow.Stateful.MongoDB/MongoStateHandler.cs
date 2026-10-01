@@ -2,6 +2,7 @@ using JetBrains.Annotations;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
 using Telegram.Bot.Types;
+using TheAirBlow.Stateful.Exceptions;
 
 namespace TheAirBlow.Stateful.MongoDB;
 
@@ -26,39 +27,63 @@ public class MongoStateHandler : IMessageStateHandler {
             }, t => t.FullName!.StartsWith("TheAirBlow.Stateful"));
     
     /// <summary>
+    /// How long a message state is kept after it was last updated, null to keep it forever.
+    /// </summary>
+    public TimeSpan? Expiry { get; set; }
+
+    /// <summary>
     /// Creates a new MongoDB message state handler
     /// </summary>
     /// <param name="collection">Collection</param>
-    public MongoStateHandler(IMongoCollection<MessageState> collection) {
+    /// <param name="expiry">How long to keep states, null to keep them forever</param>
+    public MongoStateHandler(IMongoCollection<MessageState> collection, TimeSpan? expiry = null) {
         Collection = collection;
+        Expiry = expiry;
     }
 
     /// <summary>
-    /// Returns message state for message
+    /// Creates the indexes this handler needs. Call this once on startup.
+    /// </summary>
+    public async Task EnsureIndexesAsync() {
+        var keys = Builders<MessageState>.IndexKeys;
+        var models = new List<CreateIndexModel<MessageState>> {
+            new(keys.Ascending(x => x.ChatId).Descending(x => x.MessageId),
+                new CreateIndexOptions { Unique = true, Name = "chat_message" })
+        };
+
+        if (Expiry != null)
+            models.Add(new CreateIndexModel<MessageState>(keys.Ascending(x => x.LastUpdated),
+                new CreateIndexOptions { ExpireAfter = Expiry, Name = "expiry" }));
+        await Collection.Indexes.CreateManyAsync(models);
+    }
+
+    /// <summary>
+    /// Returns the stored state of a message
+    /// </summary>
+    /// <param name="chatId">Chat ID</param>
+    /// <param name="messageId">Message ID</param>
+    /// <returns>Message state, null if none</returns>
+    private async Task<MessageState?> Find(long chatId, long messageId)
+        => await Collection.Find(x => x.ChatId == chatId && x.MessageId == messageId).FirstOrDefaultAsync();
+
+    /// <summary>
+    /// Returns message state for message, a new unsaved one if none is stored
     /// </summary>
     /// <param name="message">Message</param>
     /// <returns>Message State</returns>
     public async Task<MessageState> GetState(Message message) {
-        var chatId = message.Chat.Id;
-        var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == chatId && x.MessageId == message.Id);
-        using var res = await Collection.FindAsync(filter,
-            new FindOptions<MessageState> { Limit = 1 });
-        await res.MoveNextAsync();
-        var curState = res.Current.FirstOrDefault();
-        if (curState != null) return curState;
-        var newState = new MessageState {
+        var state = await Find(message.Chat.Id, message.Id);
+        if (state != null) { state.Expired = false; return state; }
+        return new MessageState {
             LastUpdated = DateTime.UtcNow,
             MessageId = message.Id,
-            ChatId = chatId
+            ChatId = message.Chat.Id
         };
-        
-        await Collection.InsertOneAsync(newState);
-        return newState;
     }
 
     /// <summary>
-    /// Returns message state for update
+    /// Returns message state for update, a new unsaved one if none is stored.
+    /// Clicked messages are <see cref="MessageState.Expired"/>, other updates inherit from the previous message.
     /// </summary>
     /// <param name="update">Update</param>
     /// <returns>Message State</returns>
@@ -67,47 +92,54 @@ public class MongoStateHandler : IMessageStateHandler {
         var messageId = update.GetMessageId();
         if (chatId == null || messageId == null)
             return new MessageState { LastUpdated = DateTime.UtcNow };
-        
-        var filter = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == chatId && x.MessageId == messageId);
-        using var res = await Collection.FindAsync(filter,
-            new FindOptions<MessageState> { Limit = 1 });
-        await res.MoveNextAsync();
-        var curState = res.Current.FirstOrDefault();
-        if (curState != null) return curState;
-        
+
+        var state = await Find(chatId.Value, messageId.Value);
+        if (state != null) { state.Expired = false; return state; }
+
         var newState = new MessageState {
             LastUpdated = DateTime.UtcNow, 
             MessageId = messageId.Value,
             ChatId = chatId.Value
         };
 
-        var filter2 = new ExpressionFilterDefinition<MessageState>(
-            x => x.ChatId == chatId && x.MessageId <= messageId);
-        var sort = Builders<MessageState>.Sort.Descending(x => x.MessageId);
-        using var res2 = await Collection.FindAsync(filter2,
-            new FindOptions<MessageState> { Limit = 1, Sort = sort });
-        await res2.MoveNextAsync();
-        var prevState = res2.Current.FirstOrDefault();
+        if (update.CallbackQuery != null) {
+            newState.Expired = true;
+            return newState;
+        }
+
+        var prevState = await Collection.Find(x => x.ChatId == chatId && x.MessageId < messageId)
+            .SortByDescending(x => x.MessageId).FirstOrDefaultAsync();
         if (prevState != null) {
-            newState.State = prevState.State.ToDictionary(x => x.Key, x => x.Value);
+            newState.State = new Dictionary<string, string>(prevState.State);
             newState.HandlerId = prevState.HandlerId;
             newState.SubMenu = prevState.SubMenu;
         }
-        
-        await Collection.InsertOneAsync(newState);
+
         return newState;
     }
 
     /// <summary>
-    /// Updates message state in the database
+    /// Stores message state in the database, creating it if necessary.
     /// </summary>
     /// <param name="state">Message State</param>
+    /// <exception cref="StateConflictException">The stored state was modified since it was loaded</exception>
     public async Task Update(MessageState state) {
+        var expected = state.Version;
         var filter = Builders<MessageState>.Filter;
-        await Collection.FindOneAndReplaceAsync(
-            filter.Eq(x => x.MessageId, state.MessageId) &
-            filter.Eq(x => x.ChatId, state.ChatId), state,
-            new FindOneAndReplaceOptions<MessageState> { IsUpsert = true });
+        var match = filter.Eq(x => x.Version, expected);
+        // States stored before versions existed have no version field
+        if (expected == 0) match |= filter.Exists(x => x.Version, false);
+
+        state.Version = expected + 1;
+        state.Expired = false;
+        state.LastUpdated = DateTime.UtcNow;
+        try {
+            await Collection.ReplaceOneAsync(
+                filter.Eq(x => x.ChatId, state.ChatId) & filter.Eq(x => x.MessageId, state.MessageId) & match,
+                state, new ReplaceOptions { IsUpsert = true });
+        } catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey) {
+            state.Version = expected;
+            throw new StateConflictException(state);
+        }
     }
 }

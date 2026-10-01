@@ -22,6 +22,9 @@ var mongo = new MongoClient(new MongoClientSettings {
 var database = mongo.GetDatabase("stateful-test");
 var states = database.GetCollection<MessageState>("states");
 
+var mongoStates = new MongoStateHandler(states, TimeSpan.FromDays(30));
+await mongoStates.EnsureIndexesAsync();
+
 var token = File.ReadAllText("token.txt").Trim();
 var client = new TelegramBotClient(token);
 var bot = await client.GetMe();
@@ -40,7 +43,7 @@ var stateful = new StatefulHandler(
             var usage = string.Join(" ", cmd.Parameters.Select(x => x.Required ? $"[{x.Name}]" : $"({x.Name})"));
             await handler.SendMessage($"Invalid usage, expected `/{cmd.Name} {usage}`", replyParameters: reply);
         },
-        StateHandler = new MongoStateHandler(states),
+        StateHandler = mongoStates,
         Filters = [new PrivateOnlyAttribute()],
         DefaultThreading = Threading.PerUpdate
     });

@@ -13,6 +13,10 @@ public class MainHandler : UpdateHandler {
             "Welcome to my amazing Telegram bot 👋", 
             GenerateReply());
 
+    [ExpiredHandler]
+    private async Task Expired()
+        => await SendOrEditMessage("This message has expired, send /start to get a new one");
+
     [Message("Open test")]
     private async Task Test()
         => await ChangeHandler("test", true);

@@ -19,6 +19,21 @@ public class MessageState {
     public Dictionary<string, string> State { get; set; } = [];
     
     /// <summary>
+    /// A dictionary of states that belong to this message only.
+    /// </summary>
+    public Dictionary<string, string> LocalState { get; set; } = [];
+    
+    /// <summary>
+    /// Set by the state handler when a clicked message has no stored state
+    /// </summary>
+    public bool Expired { get; set; }
+    
+    /// <summary>
+    /// Increased on every update, used to detect concurrent modifications
+    /// </summary>
+    public int Version { get; set; }
+    
+    /// <summary>
     /// When was this message state last updated
     /// </summary>
     public DateTime LastUpdated { get; set; }
@@ -44,6 +59,11 @@ public class MessageState {
     public long ChatId { get; set; }
     
     /// <summary>
+    /// Local state keys that were set for a message that is not sent yet
+    /// </summary>
+    internal HashSet<string> PendingLocal { get; } = [];
+    
+    /// <summary>
     /// Changes Handler ID
     /// </summary>
     /// <param name="id">Handler ID</param>
@@ -59,8 +79,9 @@ public class MessageState {
     /// <typeparam name="T">Type</typeparam>
     /// <returns>Value of type</returns>
     public T? GetState<T>(string key)
-        => !State.TryGetValue(key, out var value)
-            ? default : JsonSerializer.Deserialize<T>(value);
+        => LocalState.TryGetValue(key, out var local) ? JsonSerializer.Deserialize<T>(local)
+            : State.TryGetValue(key, out var value) ? JsonSerializer.Deserialize<T>(value)
+            : default;
     
     /// <summary>
     /// Remove state
@@ -69,6 +90,8 @@ public class MessageState {
     public void RemoveState(string key) {
         LastUpdated = DateTime.UtcNow;
         State.Remove(key);
+        LocalState.Remove(key);
+        PendingLocal.Remove(key);
     }
     
     /// <summary>
@@ -76,9 +99,21 @@ public class MessageState {
     /// </summary>
     /// <param name="key">Dictionary Key</param>
     /// <param name="value">Dictionary Value</param>
-    public void SetState(string key, object value) {
-        State[key] = JsonSerializer.Serialize(value);
+    /// <param name="local">Keep the value on this message only instead of passing it on to the next messages.
+    /// When used before sending a message, the value is attached to the sent message.</param>
+    public void SetState(string key, object value, bool local = false) {
+        var json = JsonSerializer.Serialize(value);
         LastUpdated = DateTime.UtcNow;
+        if (local) {
+            State.Remove(key);
+            LocalState[key] = json;
+            PendingLocal.Add(key);
+            return;
+        }
+
+        LocalState.Remove(key);
+        PendingLocal.Remove(key);
+        State[key] = json;
     }
     
     /// <summary>
@@ -87,5 +122,7 @@ public class MessageState {
     public void ClearState() {
         LastUpdated = DateTime.UtcNow;
         State.Clear();
+        LocalState.Clear();
+        PendingLocal.Clear();
     }
 }

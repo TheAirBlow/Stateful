@@ -44,7 +44,12 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="options">Stateful Options</param>
     public StatefulHandler(StatefulOptions? options = null) {
         Options = options ?? new StatefulOptions();
-        Register<InternalHandler>();
+        MatcherAttribute.InternalPrefix = Options.InternalPrefix;
+        try {
+            Register<InternalHandler>();
+        } finally {
+            MatcherAttribute.InternalPrefix = null;
+        }
     }
     
     /// <summary>
@@ -56,43 +61,62 @@ public partial class StatefulHandler : IUpdateHandler {
         => Handlers.Add(new HandlerWrapper(Options, typeof(T), id));
 
     /// <summary>
-    /// Handles an update asynchronously
+    /// Handles an update asynchronously.
     /// </summary>
     /// <param name="bot">Telegram bot client</param>
     /// <param name="update">Telegram update</param>
     /// <param name="token">Cancellation token</param>
-    public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken token)
-        => await HandleUpdate((TelegramBotClient)bot, update, token);
+    public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken token) {
+        var client = (TelegramBotClient)bot;
+        var lane = ResolveLane(update, Options.DefaultThreading);
+        if (lane.Kind == Threading.Disabled) {
+            await RunSafe(client, token, () => Process(client, update, token, lane));
+            return;
+        }
+
+        if (!Enqueue(lane, client, token, () => Process(client, update, token, lane)))
+            await ReportError(client, new InvalidOperationException(
+                $"Dropped update {update.Id}: more than {Options.MaxQueuedUpdates} updates are waiting for {lane.Kind} {lane.Key}"), token);
+    }
 
     /// <summary>
-    /// Handles an update asynchronously
+    /// Processes an incoming update.
     /// </summary>
     /// <param name="bot">Telegram bot client</param>
     /// <param name="update">Telegram update</param>
     /// <param name="token">Cancellation token</param>
-    private async Task HandleUpdate(TelegramBotClient bot, Update update, CancellationToken token) {
-        try {
-            Bot ??= await bot.GetMe(cancellationToken: token);
-            var handler = CreateHandler(bot, update);
-            if (Options.StateHandler != null && update.GetChatId() != null && update.GetMessageId() != null)
-                handler.State = await Options.StateHandler.GetState(update);
-            if (!Options.Filters.Match(handler)) return;
-            var method = GetMethod(handler);
-            if (method == null) return;
-            if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
-                try {
-                    await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
-                } catch (ApiRequestException) {
-                    // ignore
-                }
-            handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
-            Threading_Invoke(bot, token, method, handler);
-        } catch (SilentException) {
-            // Ignore
-        } catch (Exception e) {
-            if (Options.ErrorHandler == null) return;
-            await Options.ErrorHandler(bot, e, HandleErrorSource.HandleUpdateError, token);
+    /// <param name="lane">Lane this runs on</param>
+    private async Task Process(TelegramBotClient bot, Update update, CancellationToken token, Lane lane) {
+        Bot ??= await bot.GetMe(cancellationToken: token);
+        var handler = CreateHandler(bot, update);
+        
+        foreach (var filter in Options.Filters)
+            if (!filter.RequiresState && !await filter.MatchAsync(handler)) return;
+        if (Options.StateHandler != null && update.GetChatId() != null && update.GetMessageId() != null)
+            handler.State = await Options.StateHandler.GetState(update);
+        foreach (var filter in Options.Filters)
+            if (filter.RequiresState && !await filter.MatchAsync(handler)) return;
+
+        var method = GetMethod(handler);
+        if (method == null) return;
+        if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
+            try {
+                await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
+            } catch (ApiRequestException) {
+                // ignore
+            }
+
+        handler = CreateHandler(bot, update, handler.State, method.Method.DeclaringType);
+
+        var target = ResolveLane(update, method.Threading);
+        if (target == lane || target.Kind == Threading.Disabled) {
+            await method.Invoke(handler);
+            return;
         }
+
+        if (!Enqueue(target, bot, token, () => method.Invoke(handler)))
+            throw new InvalidOperationException(
+                $"Dropped update {update.Id}: more than {Options.MaxQueuedUpdates} updates are waiting for {target.Kind} {target.Key}");
     }
 
     /// <summary>
@@ -133,8 +157,14 @@ public partial class StatefulHandler : IUpdateHandler {
         var avail = Handlers
             .Where(x => handler.State.HandlerId == null || x.HandlerId == handler.State.HandlerId || x.HandlerId == null)
             .Where(x => x.Conditions.Match(handler));
+        if (handler.State.Expired)
+            foreach (var i in avail) {
+                var expired = i.Methods.FirstOrDefault(x => x.IsExpired && x.Conditions.Match(handler, false));
+                if (expired != null) return expired;
+            }
+
         foreach (var i in avail) {
-            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && x.Conditions.Match(handler, false));
+            var method = i.Methods.FirstOrDefault(x => !x.IsDefault && !x.IsExpired && x.Conditions.Match(handler, false));
             if (method == null && handler.Update.Type != UpdateType.CallbackQuery
                 && (i.PrivateOnly || Options.PrivateOnly))
                 method = GetDefault(i, handler);
@@ -232,7 +262,7 @@ public partial class StatefulHandler : IUpdateHandler {
             Methods = handler.GetMethods(Flags)
                 .Where(x => !x.IsSpecialName && x.DeclaringType != typeof(object))
                 .Where(x => x.GetParameters().Length == 0 || x.GetCustomAttributes().Any(j => j is CommandAttribute or HandlerAttribute))
-                .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute))
+                .Where(x => x.GetCustomAttributes(false).Any(j => j is HandlerAttribute or DefaultHandlerAttribute or ExpiredHandlerAttribute))
                 .OrderBy(x => x.MetadataToken)
                 .Select(x => new MethodWrapper(this, x)).ToArray();
         }
@@ -266,6 +296,11 @@ public partial class StatefulHandler : IUpdateHandler {
         /// Is this the default handler
         /// </summary>
         public bool IsDefault { get; }
+        
+        /// <summary>
+        /// Is this the handler for expired messages
+        /// </summary>
+        public bool IsExpired { get; }
 
         /// <summary>
         /// Creates a new method wrapper
@@ -277,6 +312,7 @@ public partial class StatefulHandler : IUpdateHandler {
             Conditions = attributes.Where(x => x is HandlerAttribute).Cast<HandlerAttribute>().ToArray();
             AnswersQuery = attributes.Any(x => x is AnswersQueryAttribute);
             IsDefault = attributes.Any(x => x is DefaultHandlerAttribute);
+            IsExpired = attributes.Any(x => x is ExpiredHandlerAttribute);
             Threading = handler.Threading;
             var runWith = attributes.FirstOrDefault(x => x is RunWithAttribute);
             if (runWith != null) Threading = ((RunWithAttribute)runWith).Threading;
