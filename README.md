@@ -95,4 +95,4 @@ public class MainHandler : UpdateHandler {
 ```
 
 ## Licence
-[Mozilla Public License Version 2.0](https://github.com/TheAirBlow/Syndical/blob/main/LICENCE)
+[Mozilla Public License Version 2.0](https://github.com/TheAirBlow/Syndical/blob/main/LICENSE)

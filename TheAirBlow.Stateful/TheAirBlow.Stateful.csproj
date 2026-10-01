@@ -6,13 +6,13 @@
         <Title>TheAirBlow.Stateful</Title>
         <Authors>TheAirBlow</Authors>
         <Description>Spices up Telegram bot development</Description>
-        <Copyright>Copyright © TheAirBlow 2024</Copyright>
+        <Copyright>Copyright © TheAirBlow 2026</Copyright>
         <PackageProjectUrl>https://github.com/TheAirBlow/Stateful</PackageProjectUrl>
-        <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENCE</PackageLicenseUrl>
+        <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENSE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>2.0.1</Version>
+        <Version>3.0.0</Version>
         <LangVersion>default</LangVersion>
         <IsAotCompatible>true</IsAotCompatible>
     </PropertyGroup>
