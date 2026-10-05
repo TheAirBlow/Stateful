@@ -22,7 +22,7 @@ var mongo = new MongoClient(new MongoClientSettings {
 var database = mongo.GetDatabase("stateful-test");
 var states = database.GetCollection<MessageState>("states");
 
-var mongoStates = new MongoStateHandler(states, TimeSpan.FromDays(30));
+var mongoStates = new MongoStateHandler(states, TimeSpan.FromDays(30)) { MaxStatesPerChat = 1000 };
 await mongoStates.EnsureIndexesAsync();
 
 var token = File.ReadAllText("token.txt").Trim();
@@ -32,8 +32,8 @@ Log.Information("Logged in as {0}", bot.Username);
 
 var stateful = new StatefulHandler(
     new StatefulOptions {
-        ErrorHandler = (_, e, src, _) => {
-            Log.Error("{0} occured: {1}", src, e);
+        ErrorHandler = (_, e, src, handler, _) => {
+            Log.Error("{0} occured in update {1}: {2}", src, handler?.Update.Id, e);
             return Task.CompletedTask;
         },
         CommandErrorHandler = async (handler, ex, cmd) => {

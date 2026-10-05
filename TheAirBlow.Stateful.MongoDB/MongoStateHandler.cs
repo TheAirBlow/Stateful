@@ -1,4 +1,5 @@
 using JetBrains.Annotations;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Driver;
 using Telegram.Bot.Types;
@@ -32,6 +33,11 @@ public class MongoStateHandler : IMessageStateHandler {
     public TimeSpan? Expiry { get; set; }
 
     /// <summary>
+    /// How many of the latest message states are kept per chat.
+    /// </summary>
+    public int MaxStatesPerChat { get; set; }
+
+    /// <summary>
     /// Creates a new MongoDB message state handler
     /// </summary>
     /// <param name="collection">Collection</param>
@@ -42,19 +48,28 @@ public class MongoStateHandler : IMessageStateHandler {
     }
 
     /// <summary>
-    /// Creates the indexes this handler needs. Call this once on startup.
+    /// Creates the indexes this handler needs.
     /// </summary>
     public async Task EnsureIndexesAsync() {
         var keys = Builders<MessageState>.IndexKeys;
-        var models = new List<CreateIndexModel<MessageState>> {
-            new(keys.Ascending(x => x.ChatId).Descending(x => x.MessageId),
-                new CreateIndexOptions { Unique = true, Name = "chat_message" })
-        };
+        await Collection.Indexes.CreateOneAsync(new CreateIndexModel<MessageState>(
+            keys.Ascending(x => x.ChatId).Descending(x => x.MessageId),
+            new CreateIndexOptions { Unique = true, Name = "chat_message" }));
+        if (Expiry == null) return;
 
-        if (Expiry != null)
-            models.Add(new CreateIndexModel<MessageState>(keys.Ascending(x => x.LastUpdated),
+        try {
+            await Collection.Indexes.CreateOneAsync(new CreateIndexModel<MessageState>(
+                keys.Ascending(x => x.LastUpdated),
                 new CreateIndexOptions { ExpireAfter = Expiry, Name = "expiry" }));
-        await Collection.Indexes.CreateManyAsync(models);
+        } catch (MongoCommandException e) when (e.CodeName == "IndexOptionsConflict") {
+            await Collection.Database.RunCommandAsync<BsonDocument>(new BsonDocument {
+                { "collMod", Collection.CollectionNamespace.CollectionName },
+                { "index", new BsonDocument {
+                    { "name", "expiry" },
+                    { "expireAfterSeconds", (long)Expiry.Value.TotalSeconds }
+                } }
+            });
+        }
     }
 
     /// <summary>
@@ -127,19 +142,36 @@ public class MongoStateHandler : IMessageStateHandler {
         var expected = state.Version;
         var filter = Builders<MessageState>.Filter;
         var match = filter.Eq(x => x.Version, expected);
-        // States stored before versions existed have no version field
         if (expected == 0) match |= filter.Exists(x => x.Version, false);
 
         state.Version = expected + 1;
         state.Expired = false;
         state.LastUpdated = DateTime.UtcNow;
         try {
-            await Collection.ReplaceOneAsync(
+            var result = await Collection.ReplaceOneAsync(
                 filter.Eq(x => x.ChatId, state.ChatId) & filter.Eq(x => x.MessageId, state.MessageId) & match,
                 state, new ReplaceOptions { IsUpsert = true });
+            if (result is ReplaceOneResult.Acknowledged { UpsertedId: not null })
+                _ = Trim(state.ChatId);
         } catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey) {
             state.Version = expected;
             throw new StateConflictException(state);
+        }
+    }
+
+    /// <summary>
+    /// Deletes everything but the latest <see cref="MaxStatesPerChat"/> states of a chat
+    /// </summary>
+    /// <param name="chatId">Chat ID</param>
+    private async Task Trim(long chatId) {
+        if (MaxStatesPerChat <= 0 || Random.Shared.Next(Math.Max(1, MaxStatesPerChat / 10)) != 0) return;
+        try {
+            var oldest = await Collection.Find(x => x.ChatId == chatId).SortByDescending(x => x.MessageId)
+                .Skip(MaxStatesPerChat).Project(x => x.MessageId).Limit(1).ToListAsync();
+            if (oldest.Count > 0)
+                await Collection.DeleteManyAsync(x => x.ChatId == chatId && x.MessageId <= oldest[0]);
+        } catch {
+            // The state itself is stored already, the next cleanup trims again
         }
     }
 }

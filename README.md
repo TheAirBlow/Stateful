@@ -59,7 +59,10 @@ MongoStateHandler.RegisterConvention();
 var client = new TelegramBotClient("TOKEN");
 var stateful = new StatefulHandler(
     new StatefulOptions {
-        ErrorHandler = (bot, e, src, _) => Log.Error("Error occured from {0}: {1}", src, e),
+        ErrorHandler = (bot, e, src, handler, _) => {
+            Log.Error("Error occured from {0}: {1}", src, e);
+            return Task.CompletedTask;
+        },
         StateHandler = new MongoStateHandler(collection),
         Filters = [ new PrivateOnlyAttribute() ]
     });

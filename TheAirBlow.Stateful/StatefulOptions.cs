@@ -33,7 +33,7 @@ public class StatefulOptions {
     public string InternalPrefix { get; set; } = "stinternal-";
 
     /// <summary>
-    /// How many updates may queue up per user or chat before new ones are dropped and sent to <see cref="ErrorHandler"/>. 0 for no limit.
+    /// How many updates may queue up per user, chat or message before new ones are dropped and sent to <see cref="ErrorHandler"/>. 0 for no limit.
     /// </summary>
     public int MaxQueuedUpdates { get; set; } = 100;
     
@@ -43,7 +43,7 @@ public class StatefulOptions {
     public IMessageStateHandler? StateHandler { get; set; }
     
     /// <summary>
-    /// Error handler to use
+    /// Error handler to use. Never throws into Stateful, anything it throws is ignored.
     /// </summary>
     public HandleErrorDelegate? ErrorHandler { get; set; }
     
@@ -73,6 +73,7 @@ public class StatefulOptions {
         ITelegramBotClient botClient,
         Exception exception,
         HandleErrorSource errorSource,
+        UpdateHandler? handler,
         CancellationToken cancellationToken
     );
 }
@@ -97,6 +98,14 @@ public enum Threading {
     /// Updates from the same chat are processed one after another, different chats in parallel.
     /// </summary>
     PerChat,
+    
+    /// <summary>
+    /// Updates of the same message are processed one after another, different messages in parallel.
+    /// <br/><br/>
+    /// Mostly useful for callback queries, since every new message is a different one.
+    /// Fallbacks to <see cref="PerUser"/> if message ID is not available.
+    /// </summary>
+    PerMessage,
     
     /// <summary>
     /// Everything is processed on the receiver's thread, stalling polling. You should never have to use this.

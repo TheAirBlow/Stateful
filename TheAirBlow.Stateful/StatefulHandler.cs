@@ -74,28 +74,46 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="update">Telegram update</param>
     /// <param name="token">Cancellation token</param>
     public async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken token) {
-        var client = (TelegramBotClient)bot;
+        if (bot is not TelegramBotClient client) {
+            await ReportError(bot, new ArgumentException(
+                $"Stateful needs a {nameof(TelegramBotClient)}, got {bot.GetType().FullName}", nameof(bot)), null, token);
+            return;
+        }
+
         var lane = ResolveLane(update, Options.DefaultThreading);
         if (lane.Kind == Threading.Disabled) {
-            await RunSafe(client, token, () => Process(client, update, token, lane));
+            await Process(client, update, token, lane);
             return;
         }
 
         if (!Enqueue(lane, client, token, () => Process(client, update, token, lane)))
-            await ReportError(client, new InvalidOperationException(
-                $"Dropped update {update.Id}: more than {Options.MaxQueuedUpdates} updates are waiting for {lane.Kind} {lane.Key}"), token);
+            await ReportError(client, Dropped(update, lane), null, token);
     }
 
     /// <summary>
-    /// Processes an incoming update.
+    /// Processes an incoming update, reporting any exception to the error handler. Never throws.
     /// </summary>
     /// <param name="bot">Telegram bot client</param>
     /// <param name="update">Telegram update</param>
     /// <param name="token">Cancellation token</param>
     /// <param name="lane">Lane this runs on</param>
-    private async Task Process(TelegramBotClient bot, Update update, CancellationToken token, Lane lane) {
+    private Task Process(TelegramBotClient bot, Update update, CancellationToken token, Lane lane) {
+        UpdateHandler? current = null;
+        return RunSafe(bot, token, () => Handle(bot, update, token, lane, x => current = x), () => current);
+    }
+
+    /// <summary>
+    /// Finds the method that handles an update and runs it on its lane.
+    /// </summary>
+    /// <param name="bot">Telegram bot client</param>
+    /// <param name="update">Telegram update</param>
+    /// <param name="token">Cancellation token</param>
+    /// <param name="lane">Lane this runs on</param>
+    /// <param name="track">Called with every update handler created, so errors can be reported with it</param>
+    private async Task Handle(TelegramBotClient bot, Update update, CancellationToken token, Lane lane, Action<UpdateHandler> track) {
         Bot ??= await bot.GetMe(cancellationToken: token);
         var matcher = CreateHandler(bot, update);
+        track(matcher);
         
         foreach (var filter in Options.Filters)
             if (!filter.RequiresState && !await filter.MatchAsync(matcher)) return;
@@ -116,6 +134,7 @@ public partial class StatefulHandler : IUpdateHandler {
         var handler = CreateHandler(bot, update, matcher.State, method.Create);
         handler.ParsedCommand = matcher.ParsedCommand;
         handler.CommandParsed = matcher.CommandParsed;
+        track(handler);
 
         var target = ResolveLane(update, method.Threading);
         if (target == lane || target.Kind == Threading.Disabled) {
@@ -123,9 +142,8 @@ public partial class StatefulHandler : IUpdateHandler {
             return;
         }
 
-        if (!Enqueue(target, bot, token, () => method.Invoke(handler)))
-            throw new InvalidOperationException(
-                $"Dropped update {update.Id}: more than {Options.MaxQueuedUpdates} updates are waiting for {target.Kind} {target.Key}");
+        if (!Enqueue(target, bot, token, () => method.Invoke(handler), handler))
+            throw Dropped(update, target);
     }
 
     /// <summary>
@@ -135,11 +153,8 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="exception">Exception</param>
     /// <param name="source">Error source</param>
     /// <param name="token">Cancellation token</param>
-    public async Task HandleErrorAsync(ITelegramBotClient bot, Exception exception,
-        HandleErrorSource source, CancellationToken token) {
-        if (Options.ErrorHandler == null) return;
-        await Options.ErrorHandler(bot, exception, source, token).ConfigureAwait(false);
-    }
+    public Task HandleErrorAsync(ITelegramBotClient bot, Exception exception, HandleErrorSource source, CancellationToken token)
+        => ReportError(bot, exception, null, token, source);
 
     /// <summary>
     /// Creates an update handler
