@@ -51,12 +51,7 @@ public partial class StatefulHandler : IUpdateHandler {
     /// <param name="options">Stateful Options</param>
     public StatefulHandler(StatefulOptions? options = null) {
         Options = options ?? new StatefulOptions();
-        MatcherAttribute.InternalPrefix = Options.InternalPrefix;
-        try {
-            Register<InternalHandler>();
-        } finally {
-            MatcherAttribute.InternalPrefix = null;
-        }
+        Register<InternalHandler>();
     }
     
     /// <summary>
@@ -122,9 +117,24 @@ public partial class StatefulHandler : IUpdateHandler {
         foreach (var filter in Options.Filters)
             if (filter.RequiresState && !await filter.MatchAsync(matcher)) return;
 
-        var method = await GetMethod(matcher);
+        await Dispatch(bot, update, token, lane, matcher, [], track);
+    }
+
+    /// <summary>
+    /// Finds the next method that handles an update and runs it on its lane.
+    /// </summary>
+    /// <param name="bot">Telegram bot client</param>
+    /// <param name="update">Update</param>
+    /// <param name="token">Cancellation token</param>
+    /// <param name="lane">Lane this runs on</param>
+    /// <param name="matcher">Update handler used for matching, holds the state</param>
+    /// <param name="skipped">Methods that yielded already</param>
+    /// <param name="track">Called with every update handler created, so errors can be reported with it</param>
+    private async Task Dispatch(TelegramBotClient bot, Update update, CancellationToken token, Lane lane,
+        UpdateHandler matcher, List<MethodWrapper> skipped, Action<UpdateHandler> track) {
+        var method = await GetMethod(matcher, skipped);
         if (method == null) return;
-        if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery)
+        if (update.Type == UpdateType.CallbackQuery && Options.AnswerCallbackQueries && !method.AnswersQuery && skipped.All(x => x.AnswersQuery))
             try {
                 await bot.AnswerCallbackQuery(update.CallbackQuery!.Id, cancellationToken: token);
             } catch (ApiRequestException) {
@@ -136,13 +146,22 @@ public partial class StatefulHandler : IUpdateHandler {
         handler.CommandParsed = matcher.CommandParsed;
         track(handler);
 
+        async Task Run() {
+            try {
+                await method.Invoke(handler);
+            } catch (YieldException) {
+                matcher.State = handler.State;
+                await Dispatch(bot, update, token, ResolveLane(update, method.Threading), matcher, [..skipped, method], track);
+            }
+        }
+
         var target = ResolveLane(update, method.Threading);
         if (target == lane || target.Kind == Threading.Disabled) {
-            await method.Invoke(handler);
+            await Run();
             return;
         }
 
-        if (!Enqueue(target, bot, token, () => method.Invoke(handler), handler))
+        if (!Enqueue(target, bot, token, Run, handler))
             throw Dropped(update, target);
     }
 
@@ -176,21 +195,22 @@ public partial class StatefulHandler : IUpdateHandler {
     /// Returns handler method to call
     /// </summary>
     /// <param name="handler">Update Handler</param>
+    /// <param name="skipped">Methods that yielded already</param>
     /// <returns>Handler Method</returns>
-    private async Task<MethodWrapper?> GetMethod(UpdateHandler handler) {
+    private async Task<MethodWrapper?> GetMethod(UpdateHandler handler, List<MethodWrapper> skipped) {
         var type = handler.Update.Type;
         if (handler.State.Expired)
             foreach (var wrapper in Handlers) {
                 if (!wrapper.IsAvailable(handler.State) || !await wrapper.Conditions.MatchAsync(handler)) continue;
                 foreach (var expired in wrapper.Expired)
-                    if (await expired.Conditions.MatchAsync(handler)) return expired;
+                    if (!skipped.Contains(expired) && await expired.Conditions.MatchAsync(handler)) return expired;
             }
 
         foreach (var wrapper in Handlers) {
             if (!wrapper.IsAvailable(handler.State) || !await wrapper.Conditions.MatchAsync(handler)) continue;
-            var method = await wrapper.Find(handler);
+            var method = await wrapper.Find(handler, skipped);
             if (method == null && type != UpdateType.CallbackQuery && (wrapper.PrivateOnly || Options.PrivateOnly))
-                method = await GetDefault(wrapper, handler);
+                method = await GetDefault(wrapper, handler, skipped);
             if (method != null)
                 return method;
         }
@@ -205,10 +225,11 @@ public partial class StatefulHandler : IUpdateHandler {
     /// </summary>
     /// <param name="wrapper">Handler Wrapper</param>
     /// <param name="handler">Update Handler</param>
+    /// <param name="skipped">Methods that yielded already</param>
     /// <returns>Default Handler</returns>
-    private static async Task<MethodWrapper?> GetDefault(HandlerWrapper wrapper, UpdateHandler handler) {
+    private static async Task<MethodWrapper?> GetDefault(HandlerWrapper wrapper, UpdateHandler handler, List<MethodWrapper>? skipped = null) {
         foreach (var method in wrapper.Defaults)
-            if (await method.Conditions.MatchAsync(handler)) return method;
+            if (skipped?.Contains(method) != true && await method.Conditions.MatchAsync(handler)) return method;
         return null;
     }
 
@@ -336,8 +357,9 @@ public partial class StatefulHandler : IUpdateHandler {
         /// Returns the first method, in declaration order, whose conditions match the update.
         /// </summary>
         /// <param name="handler">Update Handler</param>
+        /// <param name="skipped">Methods that yielded already</param>
         /// <returns>Method, null if none</returns>
-        public async Task<MethodWrapper?> Find(UpdateHandler handler) {
+        public async Task<MethodWrapper?> Find(UpdateHandler handler, List<MethodWrapper> skipped) {
             var type = handler.Update.Type;
             var bucket = _buckets[(int)type] ??= CreateBucket(type);
             var key = type switch {
@@ -354,7 +376,7 @@ public partial class StatefulHandler : IUpdateHandler {
             while (i < keyed.Length || j < rest.Length) {
                 var method = j >= rest.Length || (i < keyed.Length && keyed[i].Order < rest[j].Order)
                     ? keyed[i++] : rest[j++];
-                if (await method.Conditions.MatchAsync(handler)) return method;
+                if (!skipped.Contains(method) && await method.Conditions.MatchAsync(handler)) return method;
             }
 
             return null;

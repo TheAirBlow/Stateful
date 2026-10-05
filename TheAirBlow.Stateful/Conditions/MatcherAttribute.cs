@@ -16,25 +16,14 @@ public abstract class MatcherAttribute : HandlerAttribute {
     public Data Matcher { get; protected init; }
     
     /// <summary>
-    /// <see cref="StatefulOptions.InternalPrefix"/> while <see cref="InternalHandler"/> is being registered,
-    /// null otherwise
+    /// Selector value
     /// </summary>
-    [ThreadStatic]
-    internal static string? InternalPrefix;
-    
-    /// <summary>
-    /// Selector value.
-    /// </summary>
-    public string? Selector {
-        get;
-        protected init => field = InternalPrefix == null ? value : value?.Replace("{internal}",
-            Matcher is Data.Regex or Data.ParsedRegex ? Regex.Escape(InternalPrefix) : InternalPrefix);
-    }
+    public string? Selector { get; protected init; }
 
     /// <summary>
-    /// Selector without the trailing newlines, used by <see cref="Data.Equals"/>
+    /// Selector with the placeholder resolved for the prefix it was last resolved with
     /// </summary>
-    private string? _equals;
+    private (string? Prefix, string Selector, Regex? Regex) _resolved;
 
     /// <summary>
     /// The only value this matches, null if it can match more than one
@@ -42,25 +31,38 @@ public abstract class MatcherAttribute : HandlerAttribute {
     internal string? Exact => Matcher == Data.Equals ? Selector?.TrimEnd('\n') : null;
 
     /// <summary>
-    /// Returns the selector regex
+    /// Returns the selector with <c>{internal}</c> replaced by the handler's internal prefix
     /// </summary>
-    private Regex Pattern => field ??= new Regex(Selector!, RegexOptions.CultureInvariant);
+    private (string Selector, Regex? Regex) Resolve(UpdateHandler handler) {
+        var prefix = handler.Stateful.Options.InternalPrefix;
+        var cached = _resolved;
+        if (cached.Prefix == prefix) return (cached.Selector, cached.Regex);
+        var isRegex = Matcher is Data.Regex or Data.ParsedRegex;
+        var selector = Selector!.Replace("{internal}", isRegex ? Regex.Escape(prefix) : prefix);
+        var regex = isRegex ? new Regex(selector, RegexOptions.CultureInvariant) : null;
+        _resolved = (prefix, selector, regex);
+        return (selector, regex);
+    }
 
     /// <summary>
     /// Checks if the condition matches for specified value
     /// </summary>
+    /// <param name="handler">Update Handler</param>
     /// <param name="value">String value</param>
     /// <returns>True if matches</returns>
-    protected bool Matches(string? value)
-        => Selector == null || (value != null && Matcher switch {
-            Data.Equals => value == (_equals ??= Selector.TrimEnd('\n')),
-            Data.StartsWith => value.StartsWith(Selector, StringComparison.Ordinal),
-            Data.EndsWith => value.EndsWith(Selector, StringComparison.Ordinal),
-            Data.Contains => value.Contains(Selector, StringComparison.Ordinal),
-            Data.Regex => Pattern.IsMatch(value),
-            Data.ParsedRegex => Pattern.IsMatch(value),
+    protected bool Matches(UpdateHandler handler, string? value) {
+        if (Selector == null) return true;
+        if (value == null) return false;
+        var (selector, regex) = Resolve(handler);
+        return Matcher switch {
+            Data.Equals => value == selector.TrimEnd('\n'),
+            Data.StartsWith => value.StartsWith(selector, StringComparison.Ordinal),
+            Data.EndsWith => value.EndsWith(selector, StringComparison.Ordinal),
+            Data.Contains => value.Contains(selector, StringComparison.Ordinal),
+            Data.Regex or Data.ParsedRegex => regex!.IsMatch(value),
             _ => false
-        });
+        };
+    }
 
     /// <summary>
     /// Returns arguments to pass to specified method
@@ -71,7 +73,7 @@ public abstract class MatcherAttribute : HandlerAttribute {
     /// <returns>Arguments</returns>
     protected object[]? GetArguments(UpdateHandler handler, MethodBase method, string? value) {
         if (value == null || Selector == null || Matcher != Data.ParsedRegex) return null;
-        var match = Pattern.Match(value);
+        var match = Resolve(handler).Regex!.Match(value);
         if (match.Groups.Count - 1 != method.GetParameters().Length)
             throw new InvalidDataException($"Method {method.DeclaringType?.FullName ?? "Anonymous"}.{method.Name} was expected to have {match.Groups.Count - 1} arguments but found {method.GetParameters().Length} instead");
         return match.Groups.Values.Skip(1).Select(x => x.Value).Zip(method.GetParameters(), (a, b) => TypeMapper.Map(b.ParameterType, a)).ToArray();

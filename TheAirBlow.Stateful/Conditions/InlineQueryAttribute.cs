@@ -41,7 +41,7 @@ public class InlineQueryAttribute : MatcherAttribute {
     /// <param name="handler">Update Handler</param>
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler)
-        => handler.Update.Type == UpdateType.InlineQuery && Matches(handler.Update.InlineQuery?.Query);
+        => handler.Update.Type == UpdateType.InlineQuery && Matches(handler, handler.Update.InlineQuery?.Query);
     
     /// <summary>
     /// Returns arguments to pass to specified method

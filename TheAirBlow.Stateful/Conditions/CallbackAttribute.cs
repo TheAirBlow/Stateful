@@ -54,7 +54,7 @@ public class CallbackAttribute : MatcherAttribute {
     /// <param name="handler">Update Handler</param>
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler)
-        => handler.Update.Type == UpdateType.CallbackQuery && Matches(handler.Update.CallbackQuery?.Data);
+        => handler.Update.Type == UpdateType.CallbackQuery && Matches(handler, handler.Update.CallbackQuery?.Data);
     
     /// <summary>
     /// Returns arguments to pass to specified method

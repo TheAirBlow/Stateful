@@ -101,7 +101,6 @@ public static class Extensions {
         if (source.ChatId != msg.Chat.Id || source.MessageId != msg.MessageId) {
             state = await stateHandler.GetState(msg);
             state.HandlerId = source.HandlerId;
-            state.SubMenu = source.SubMenu;
             state.State = new Dictionary<string, string>(source.State);
             foreach (var key in source.PendingLocal)
                 if (source.LocalState.TryGetValue(key, out var value))

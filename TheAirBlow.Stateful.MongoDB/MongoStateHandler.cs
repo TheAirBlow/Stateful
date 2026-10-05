@@ -127,7 +127,6 @@ public class MongoStateHandler : IMessageStateHandler {
         if (prevState != null) {
             newState.State = new Dictionary<string, string>(prevState.State);
             newState.HandlerId = prevState.HandlerId;
-            newState.SubMenu = prevState.SubMenu;
         }
 
         return newState;

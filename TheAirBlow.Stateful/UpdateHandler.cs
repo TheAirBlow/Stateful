@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using JetBrains.Annotations;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -5,6 +6,7 @@ using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TheAirBlow.Stateful.Commands;
 using TheAirBlow.Stateful.Conditions;
+using TheAirBlow.Stateful.Exceptions;
 using TheAirBlow.Stateful.Keyboards;
 
 namespace TheAirBlow.Stateful; 
@@ -66,6 +68,13 @@ public partial class UpdateHandler {
     /// <param name="runDefault">Run default</param>
     public async Task ChangeHandler(string id, bool runDefault = false)
         => await Stateful.ChangeHandler(this, id, runDefault);
+
+    /// <summary>
+    /// Stops this method and lets the next applicable method take over, including methods of other handler classes.
+    /// State changes made so far are kept, but are only saved if <see cref="SaveState"/> was called.
+    /// </summary>
+    [DoesNotReturn]
+    public void Yield() => throw new YieldException();
 
     /// <summary>
     /// Saves state changes to the database.

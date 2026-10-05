@@ -63,7 +63,7 @@ public class MessageAttribute : MatcherAttribute {
     /// <returns>True if matches</returns>
     public override bool Match(UpdateHandler handler)
         => handler.Update.Type == UpdateType.Message && handler.Update.Message!.Type == Type &&
-           (Type != MessageType.Text || Matches(handler.Update.Message?.Text));
+           (Type != MessageType.Text || Matches(handler, handler.Update.Message?.Text));
     
     /// <summary>
     /// Returns arguments to pass to specified method
