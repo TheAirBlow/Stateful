@@ -81,8 +81,7 @@ public partial class UpdateHandler {
     /// Required if you edit the current message instead of sending a new one.
     /// </summary>
     public async Task SaveState() {
-        if (Stateful.Options.StateHandler == null) return;
-        await Stateful.Options.StateHandler.Update(State);
+        await Stateful.SaveState(State);
     }
     
     /// <summary>

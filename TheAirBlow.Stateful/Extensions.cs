@@ -94,24 +94,9 @@ public static class Extensions {
     /// <param name="handler">Update Handler</param>
     /// <param name="source">State to take values from</param>
     /// <param name="msg">Message</param>
-    private static async Task PutState(UpdateHandler handler, MessageState source, Message msg) {
-        var stateHandler = handler.Stateful.Options.StateHandler;
-        if (stateHandler == null) return;
-        var state = source;
-        if (source.ChatId != msg.Chat.Id || source.MessageId != msg.MessageId) {
-            state = await stateHandler.GetState(msg);
-            state.HandlerId = source.HandlerId;
-            state.State = new Dictionary<string, string>(source.State);
-            foreach (var key in source.PendingLocal)
-                if (source.LocalState.TryGetValue(key, out var value))
-                    state.LocalState[key] = value;
-        }
+    private static async Task PutState(UpdateHandler handler, MessageState source, Message msg)
+        => handler.State = await handler.Stateful.PutState(source, msg);
 
-        state.LastUpdated = DateTime.UtcNow;
-        await stateHandler.Update(state);
-        handler.State = state;
-    }
-    
     /// <summary>
     /// Checks if all conditions match
     /// </summary>

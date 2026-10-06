@@ -41,6 +41,11 @@ public class MessageState {
     public DateTime LastUpdated { get; set; }
     
     /// <summary>
+    /// When should the state handler delete this message state, null to keep it.
+    /// </summary>
+    public DateTime? ExpiresAt { get; set; }
+    
+    /// <summary>
     /// Unique identifier of the current update handler
     /// </summary>
     public string? HandlerId { get; set; }

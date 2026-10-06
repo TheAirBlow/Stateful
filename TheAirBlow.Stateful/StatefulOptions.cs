@@ -22,6 +22,11 @@ public class StatefulOptions {
     public bool AnswerCallbackQueries { get; set; } = true;
 
     /// <summary>
+    /// Treats a clicked message that has no stored state as expired, if it isnt certain that it did.
+    /// </summary>
+    public bool AssumeExpired { get; set; }
+
+    /// <summary>
     /// Default threading option for update handlers. Set to <see cref="Threading.PerUser"/> by default.
     /// Can be overridden by adding <see cref="RunWithAttribute"/> to a method or class.
     /// </summary>

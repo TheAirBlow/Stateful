@@ -42,6 +42,9 @@ private async Task Expired()
     => await SendOrEditMessage("This menu has expired");
 ```
 
+If your state handler doesn't mark such messages as expired itself, set `AssumeExpired = true` in `StatefulOptions`:
+a button click on a message that has no stored state is then treated as expired.
+
 ### Concurrent changes
 `MongoStateHandler` versions each state and throws `StateConflictException` if it was changed by someone else
 since you loaded it. Reload with `GetState` and apply your change again.

@@ -7,7 +7,7 @@ namespace TheAirBlow.Stateful.Conditions;
 /// <summary>
 /// Marks the method as an update handler and checks if specified condition matches
 /// </summary>
-[PublicAPI]
+[PublicAPI, MeansImplicitUse]
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
 public abstract class HandlerAttribute : Attribute {
     /// <summary>

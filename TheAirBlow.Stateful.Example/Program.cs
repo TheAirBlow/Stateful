@@ -22,7 +22,7 @@ var mongo = new MongoClient(new MongoClientSettings {
 var database = mongo.GetDatabase("stateful-test");
 var states = database.GetCollection<MessageState>("states");
 
-var mongoStates = new MongoStateHandler(states, TimeSpan.FromDays(30)) { MaxStatesPerChat = 1000 };
+var mongoStates = new MongoStateHandler(states, TimeSpan.FromDays(30)) { MinStatesPerChat = 1000 };
 await mongoStates.EnsureIndexesAsync();
 
 var token = File.ReadAllText("token.txt").Trim();

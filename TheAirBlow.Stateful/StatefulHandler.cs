@@ -55,6 +55,42 @@ public partial class StatefulHandler : IUpdateHandler {
     }
     
     /// <summary>
+    /// Saves state changes to the database.
+    /// </summary>
+    /// <exception cref="StateConflictException">State was modified since it was loaded</exception>
+    /// <param name="state">Message state</param>
+    public async Task SaveState(MessageState state) {
+        if (Options.StateHandler == null) return;
+        await Options.StateHandler.Update(state);
+    }
+
+    /// <summary>
+    /// Stores state for a message that was just sent or edited.
+    /// If the message is not the one <paramref name="source"/> belongs to,
+    /// the stored state of the message gets the handler and values of <paramref name="source"/>.
+    /// </summary>
+    /// <param name="source">State to take values from</param>
+    /// <param name="msg">Message</param>
+    /// <returns>State that was stored, <paramref name="source"/> if there is no state handler</returns>
+    public async Task<MessageState> PutState(MessageState source, Message msg) {
+        var stateHandler = Options.StateHandler;
+        if (stateHandler == null) return source;
+        var state = source;
+        if (source.ChatId != msg.Chat.Id || source.MessageId != msg.MessageId) {
+            state = await stateHandler.GetState(msg);
+            state.HandlerId = source.HandlerId;
+            state.State = new Dictionary<string, string>(source.State);
+            foreach (var key in source.PendingLocal)
+                if (source.LocalState.TryGetValue(key, out var value))
+                    state.LocalState[key] = value;
+        }
+
+        state.LastUpdated = DateTime.UtcNow;
+        await SaveState(state);
+        return state;
+    }
+
+    /// <summary>
     /// Registers a handler. If unique ID is null, handler is considered global.
     /// </summary>
     /// <param name="id">Unique ID</param>
@@ -114,6 +150,8 @@ public partial class StatefulHandler : IUpdateHandler {
             if (!filter.RequiresState && !await filter.MatchAsync(matcher)) return;
         if (Options.StateHandler != null && update.GetChatId() != null && update.GetMessageId() != null)
             matcher.State = await Options.StateHandler.GetState(update);
+        if (Options.AssumeExpired && Options.StateHandler != null && update.CallbackQuery != null && matcher.State.Version == 0)
+            matcher.State.Expired = true;
         foreach (var filter in Options.Filters)
             if (filter.RequiresState && !await filter.MatchAsync(matcher)) return;
 

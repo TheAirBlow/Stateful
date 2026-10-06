@@ -1,16 +1,32 @@
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
       - name: Build
         run: dotnet build --configuration Release
       - name: Package
-        run: dotnet pack --configuration Release --output .
-      - name: Publish
         run: |
-          dotnet nuget push "*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${GITHUB_TOKEN}
+          dotnet pack TheAirBlow.Stateful --configuration Release --no-build --output nupkg
+          dotnet pack TheAirBlow.Stateful.MongoDB --configuration Release --no-build --output nupkg
+      - name: Log in to NuGet
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - name: Publish
+        run: dotnet nuget push "nupkg/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "$NUGET_API_KEY"
         env:
-          GITHUB_TOKEN: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
