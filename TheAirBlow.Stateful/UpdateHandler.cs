@@ -87,57 +87,25 @@ public partial class UpdateHandler {
     /// <summary>
     /// Generates a reply keyboard for this handler
     /// </summary>
+    /// <param name="allHandlers">Include buttons of all handlers available for the current state (e.g. the active one when called from a global handler)</param>
     /// <returns>Generated reply keyboard</returns>
-    public ReplyKeyboardMarkup GenerateReply() {
-        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
-        if (wrapper == null) throw new InvalidOperationException(
-            "This method can only be used inside a registered handler");
-        var list = new List<string>();
-        
-        foreach (var method in wrapper.Methods) {
-            var msg = (MessageAttribute?)method.Conditions.FirstOrDefault(x => x is MessageAttribute);
-            if (msg == null || msg.Hidden || msg.Selector == null || msg.Matcher != Data.Equals || msg.Type != MessageType.Text) continue;
-            if (method.Conditions.Where(x => x is not MessageAttribute)
-                .Any(x => !x.MatchAsync(this).GetAwaiter().GetResult())) continue;
-            list.Add(msg.Selector);
-        }
-        return Keyboard.Reply(list.ToArray());
-    }
+    public ReplyKeyboardMarkup GenerateReply(bool allHandlers = false)
+        => Stateful.GenerateReply(this, allHandlers);
     
     /// <summary>
-    /// Generates a reply keyboard for this handler
+    /// Generates an inline keyboard for this handler
     /// </summary>
-    /// <returns>Generated reply keyboard</returns>
-    public InlineKeyboardMarkup GenerateInline() {
-        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
-        if (wrapper == null) throw new InvalidOperationException(
-            "This method can only be used inside a registered handler");
-        
-        var dict = new Dictionary<string, string>();
-        foreach (var method in wrapper.Methods) {
-            var call = (CallbackAttribute?)method.Conditions.FirstOrDefault(x => x is CallbackAttribute);
-            if (call == null || call.Hidden || call.Selector == null || call.Matcher != Data.Equals) continue;
-            if (method.Conditions.Where(x => x is not CallbackAttribute)
-                .Any(x => !x.MatchAsync(this).GetAwaiter().GetResult())) continue;
-            var name = call.Name ?? call.Selector;
-            if (!dict.TryAdd(name, call.Selector.TrimEnd('\n')))
-                throw new InvalidOperationException($"Duplicate inline button name \"{name.TrimEnd('\n')}\" in {GetType().FullName}");
-        }
-        return Keyboard.Inline(dict);
-    }
+    /// <param name="allHandlers">Include buttons of all handlers available for the current state (e.g. the active one when called from a global handler)</param>
+    /// <returns>Generated inline keyboard</returns>
+    public InlineKeyboardMarkup GenerateInline(bool allHandlers = false)
+        => Stateful.GenerateInline(this, allHandlers);
 
     /// <summary>
     /// Returns a list of available commands
     /// </summary>
     /// <param name="all">Include commands whose other conditions (such as private only) don't match the current update</param>
+    /// <param name="allHandlers">Include commands of all handlers available for the current state</param>
     /// <returns>List of commands</returns>
-    public CommandInfo[] GetCommands(bool all = false) {
-        var wrapper = Stateful.Handlers.FirstOrDefault(x => x.Handler == GetType());
-        if (wrapper == null) throw new InvalidOperationException(
-            "This method can only be used inside a registered handler");
-
-        return wrapper.Methods.Where(x => x.Conditions.Any(j => j is CommandAttribute))
-            .Where(x => all || x.Conditions.Where(j => j is not CommandAttribute).ToArray().Match(this))
-            .Select(x => new CommandInfo(x.Method)).ToArray();
-    }
+    public CommandInfo[] GetCommands(bool all = false, bool allHandlers = false)
+        => Stateful.GetCommands(this, all, allHandlers);
 }

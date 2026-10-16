@@ -11,7 +11,7 @@
         <PackageLicenseUrl>https://github.com/TheAirBlow/Stateful/blob/main/LICENSE</PackageLicenseUrl>
         <RepositoryUrl>https://github.com/TheAirBlow/Stateful.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <Version>3.2.0</Version>
+        <Version>3.2.1</Version>
         <LangVersion>default</LangVersion>
         <IsAotCompatible>true</IsAotCompatible>
     </PropertyGroup>
